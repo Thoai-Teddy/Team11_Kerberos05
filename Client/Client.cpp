@@ -62,13 +62,18 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
     std::string idC = parts[1];
     std::string ticketV = parts[2];
     std::string encryptedData = parts[3];
+    vector<unsigned char> encryptedData_vec = padString(encryptedData);
 
     if (realmC != clientInfo.getRealm() || idC != clientInfo.getID()) {
         throw std::runtime_error("Mismatch between TGS response and client information");
     }
 
+    vector<unsigned char> kcTgs_vec = padString(kcTgs);
+    vector<unsigned char> iv_vec = padString(iv);
+
     // Giải mã E(Kc,tgs, [...])
-    std::string decryptedData = aes_decrypt_cbc(encryptedData, kcTgs, iv);
+    vector<unsigned char> decryptedData_vec = aes_cbc_decrypt(encryptedData_vec, kcTgs_vec, iv_vec);
+    std::string decryptedData = unpadString(decryptedData_vec);
 
     // Tách dữ liệu đã giải mã
     std::vector<std::string> decryptedParts = splitString(decryptedData, "||");
@@ -79,6 +84,8 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
     std::string kcv = decryptedParts[0];
     std::string realmV = decryptedParts[5];  // Realm của Server V
     std::string idV = decryptedParts[6];     // ID của Server V
+
+    vector<unsigned char> kcv_vec = padString(kcv);
 
     // Kiểm tra xem realmV và idV có khớp với thông tin của serverV không
     if (realmV != serverInfo.getRealm() || idV != serverInfo.getID()) {
@@ -104,8 +111,11 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
 
     // Tạo đối tượng AuthenticatorC bằng cách gọi hàm riêng
     std::string authenticator = createAuthenticator(clientInfo, decryptedParts[0]);
+    vector<unsigned char> authenticator_vec = padString(authenticator);
 
-    std::string authenticator_en = aes_decrypt_cbc(authenticator, kcv, iv);
+    vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
+
+    std::string authenticator_en = unpadString(authenticator_en_vec);
 
     // Tạo message gửi đi
     std::string message = OPTION + "||" + ticketV + "||" + authenticator_en;

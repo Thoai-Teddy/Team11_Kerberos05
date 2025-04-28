@@ -83,10 +83,10 @@ struct TGSData {
         : realmC(rc), idC(id), ticketV(ticket), kcV(kc), timeInfo{ tf, tt, trt }, nonce2(n), realmV(rv), idV(iv) {}
 };
 
-//client
-std::string aes_encrypt_cbc(const std::string& plaintext, const std::string& key, const std::string& iv);
-std::string aes_decrypt_cbc(const std::string& cyphertext, const std::string& key, const std::string& iv);
+
 void handleCtrlC(int sig);
+std::vector<std::string> splitString(const std::string& input, const std::string& delimiter);
+std::chrono::system_clock::time_point parseTimestamp(const std::string& timestamp);
 
 //hash SHA1
 uint32_t left_rotate(uint32_t value, unsigned int count);
