@@ -1,53 +1,6 @@
-﻿#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <iostream>
-#include <csignal> // Dùng signal() để bắt Ctrl+C
-#include <openssl/aes.h>      // Cho các hàm, cấu trúc AES
-#include <openssl/evp.h>      // Cho API mã hóa cấp cao (EVP_* functions)
-#include <openssl/rand.h>     // Để tạo số ngẫu nhiên (ví dụ tạo IV)
-#include <openssl/err.h>      // Để xử lý lỗi OpenSSL
-#include <vector>
-#include <stdexcept>
-#pragma comment(lib, "Ws2_32.lib")
-
-using namespace std;
+﻿#include "../Utils/Utils.h"
 
 SOCKET clientSocket; // Để đóng socket khi cần
-
-// Hàm AES CBC Encrypt
-std::vector<unsigned char> aes_encrypt_cbc(const unsigned char* plaintext, int plaintext_len,
-    const unsigned char* key, const unsigned char* iv) {
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) {
-        throw std::runtime_error("Failed to create EVP_CIPHER_CTX");
-    }
-
-    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("EVP_EncryptInit_ex failed");
-    }
-
-    std::vector<unsigned char> ciphertext(plaintext_len + EVP_CIPHER_block_size(EVP_aes_256_cbc()));
-    int len = 0;
-    int ciphertext_len = 0;
-
-    if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len, plaintext, plaintext_len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("EVP_EncryptUpdate failed");
-    }
-    ciphertext_len = len;
-
-    if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("EVP_EncryptFinal_ex failed");
-    }
-    ciphertext_len += len;
-
-    ciphertext.resize(ciphertext_len); // Resize lại đúng kích thước thực
-    EVP_CIPHER_CTX_free(ctx);
-
-    return ciphertext;
-}
 
 // Hàm xử lý Ctrl+C
 void handleCtrlC(int sig) {
