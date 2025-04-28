@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <string>
 #include <chrono>
+#include <ctime>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -83,10 +84,34 @@ struct TGSData {
         : realmC(rc), idC(id), ticketV(ticket), kcV(kc), timeInfo{ tf, tt, trt }, nonce2(n), realmV(rv), idV(iv) {}
 };
 
-//client
-std::string aes_encrypt_cbc(const std::string& plaintext, const std::string& key, const std::string& iv);
-std::string aes_decrypt_cbc(const std::string& cyphertext, const std::string& key, const std::string& iv);
-void handleCtrlC(int sig);
+//Step 6: Service Server reply to Client:
+// Cấu trúc Dữ liệu mã hóa Server gửi cho Client
+struct ServiceServerData {
+    std::string clientID;        // Thông tin định danh Client
+    std::string encryptedData;   // Dữ liệu đã mã hóa (E(Kc,v [TS2 || Subkey || Seq #]))
+    std::chrono::system_clock::time_point TS2;    // Timestamp khi Server gửi dữ liệu
+    std::string subkey;          // Subkey bảo vệ phiên giao dịch
+    uint32_t seqNum;             // Sequence number để tránh tấn công phát lại
+    std::string kcV;             // Khóa phiên giữa Client và Server V
+
+    // Constructor để khởi tạo dữ liệu mã hóa
+    ServiceServerData(const std::string& client, const std::string& encData,
+        std::chrono::system_clock::time_point ts, const std::string& subk,
+        uint32_t seq, const std::string& kc)
+        : clientID(client), encryptedData(encData), TS2(ts), subkey(subk), seqNum(seq), kcV(kc) {}
+};
+ServiceTicket createServiceTicket(const std::string& clientID, const std::string& flags, const std::string& sessionKey, const std::string& clientAD, 
+    const std::string& realmc, const std::chrono::system_clock::time_point& from, const std::chrono::system_clock::time_point& till,
+    const std::chrono::system_clock::time_point& rtime);
+
+std::chrono::system_clock::time_point createTS2();
+std::string timeToString(std::chrono::system_clock::time_point timePoint);
+
+std::string createSubkey(const std::string& key, const std::string& data);
+
+
+
+
 
 //hash SHA1
 uint32_t left_rotate(uint32_t value, unsigned int count);
@@ -118,5 +143,4 @@ vector<unsigned char> aes_cbc_decrypt(const vector<unsigned char>& ciphertext, c
 vector<unsigned char> padString(const string& input);
 string unpadString(const vector<unsigned char>& input);
 
-//Step 6: Service Server reply to Client:
 

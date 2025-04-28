@@ -529,47 +529,60 @@ std::chrono::system_clock::time_point parseTimestamp(const std::string& timestam
 }
 
 
+
+//Step 6:
+ServiceTicket createServiceTicket(const std::string& clientID, const std::string& flags, const std::string& sessionKey,
+    const std::string& clientAD, const std::string& realmc,
+    const std::chrono::system_clock::time_point& from,
+    const std::chrono::system_clock::time_point& till,
+    const std::chrono::system_clock::time_point& rtime) {
+    ServiceTicket ticket;
+    ticket.clientID = clientID;
+    ticket.flags = flags;
+    ticket.sessionKey = sessionKey;
+    ticket.clientAD = clientAD;
+    ticket.realmc = realmc;
+    ticket.timeInfo.from = from;
+    ticket.timeInfo.till = till;
+    ticket.timeInfo.rtime = rtime;
+    return ticket;
+}
+
+// Lấy thời gian hiện tại
+std::chrono::system_clock::time_point createTS2() {
+    return std::chrono::system_clock::now();  
+}
+std::string timeToString(std::chrono::system_clock::time_point timePoint) {
+    std::time_t timeT = std::chrono::system_clock::to_time_t(timePoint);
+
+    // Khai báo mảng char đủ lớn để chứa chuỗi thời gian
+    char buffer[100];
+
+    // Sử dụng ctime_s để chuyển đổi thời gian
+    ctime_s(buffer, sizeof(buffer), &timeT);
+
+    return std::string(buffer);
+}
+
+// Hàm tạo Subkey sử dụng SHA-1
+std::string createSubkey(const std::string& key, const std::string& data) { // data có thể là 1 dữ liệu bất kỳ, ở đây sẽ chọn data là TS2.
+    std::string combined = key + data;
+    std::string hash_result = sha1(combined);
+
+    return hash_result;
+}
+
+
+
 int main() {
-    // Nhập plaintext từ người dùng
-    cout << "Nhap plaintext: ";
-    string plaintext;
-    getline(cin, plaintext);
+    chrono::system_clock::time_point tnow = createTS2();
+    string stime = timeToString(tnow);
+    cout << "TS2: " << stime << endl;
 
-    // Nhập key (giả sử key 16 bytes)
-    cout << "Nhap key (toi da 16 ky tu): ";
-    string key_input;
-    getline(cin, key_input);
-
-    if (key_input.size() > BLOCK_SIZE) {
-        key_input = key_input.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> key(key_input.begin(), key_input.end());
-    while (key.size() < BLOCK_SIZE) key.push_back(0x00); // Bổ sung nếu thiếu
-
-    // IV khởi tạo ngẫu nhiên hoặc cố định (ví dụ cố định 16 bytes toàn số 0)
-    vector<unsigned char> iv(BLOCK_SIZE, 0x00);
-
-    // Padding plaintext
-    vector<unsigned char> padded_plaintext = padString(plaintext);
-
-    // Mã hóa
-    vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, key, iv);
-
-    // In ciphertext dạng hex
-    cout << "Ciphertext (hex): ";
-    for (unsigned char c : ciphertext) {
-        printf("%02X", c);
-    }
-    cout << endl;
-
-    // Giải mã
-    vector<unsigned char> decrypted_padded_plaintext = aes_cbc_decrypt(ciphertext, key, iv);
-
-    // Gỡ padding
-    string decrypted_plaintext = unpadString(decrypted_padded_plaintext);
-
-    // In plaintext sau giải mã
-    cout << "Plaintext sau khi giai ma: " << decrypted_plaintext << endl;
+    string key = "mysecretkey";
+    // Tạo subkey
+    string subkey = createSubkey(key, stime);
+    cout << "Subkey: " << subkey << endl;
 
     return 0;
 }
