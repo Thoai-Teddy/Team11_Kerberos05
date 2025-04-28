@@ -69,6 +69,23 @@ unsigned char rsbox[256] = {
 
 
 
+std::string info::getID() const {
+    return id;
+}
+
+std::string info::getAD() const {
+    return ad;
+}
+
+std::string info::getRealm() const {
+    return realm;
+}
+
+std::string info::getPublicKey() const {
+    return pub_key;
+}
+
+
 
 // Hàm dịch bit trái
 uint32_t left_rotate(uint32_t value, unsigned int count) {
@@ -491,6 +508,25 @@ string unpadString(const vector<unsigned char>& input) {
     return string(input.begin(), input.end() - paddingLength);
 }
 
+
+
+// Hàm tách chuỗi dựa trên dấu phân cách
+std::vector<std::string> splitString(const std::string& input, const std::string& delimiter) {
+    std::vector<std::string> tokens;
+    size_t start = 0, end = 0;
+    while ((end = input.find(delimiter, start)) != std::string::npos) {
+        tokens.push_back(input.substr(start, end - start));
+        start = end + delimiter.length();
+    }
+    tokens.push_back(input.substr(start));
+    return tokens;
+}
+
+std::chrono::system_clock::time_point parseTimestamp(const std::string& timestamp) {
+    // Replace this with the actual implementation to convert string to time_point
+    std::time_t time = std::stoll(timestamp); // Example: convert string to long long and then to time_t
+    return std::chrono::system_clock::from_time_t(time);
+}
 
 
 int main() {

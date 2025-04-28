@@ -1,5 +1,7 @@
 ﻿#include "../Utils/Utils.h"
 
+std::string OPTION = "";
+
 SOCKET clientSocket; // Để đóng socket khi cần
 
 // Hàm xử lý Ctrl+C
@@ -8,6 +10,107 @@ void handleCtrlC(int sig) {
     closesocket(clientSocket);
     WSACleanup();
     exit(0);
+}
+
+void sendToServer(SOCKET clientSocket, const std::string& message) {
+    // Gửi dữ liệu tới server
+    int messageLength = static_cast<int>(message.size());
+
+    // Gửi thông điệp qua socket
+    int result = send(clientSocket, message.c_str(), messageLength, 0);
+
+    if (result == SOCKET_ERROR) {
+        std::cerr << "Failed to send message to server. Error: " << WSAGetLastError() << std::endl;
+        closesocket(clientSocket);  // Đảm bảo đóng socket khi có lỗi
+        WSACleanup();
+    }
+    else {
+        std::cout << "Message sent to server: " << message << std::endl;
+    }
+}
+
+std::string createAuthenticator(const info& clientInfo, const std::string& subkey) {
+    // Tạo đối tượng AuthenticatorC
+    AuthenticatorC authenticator;
+    authenticator.clientID = clientInfo.getID();  // ID của Client
+    authenticator.realmc = clientInfo.getRealm(); // Realm của Client
+    authenticator.TS2 = std::chrono::system_clock::now(); // Timestamp khi Client gửi yêu cầu
+    authenticator.subkey = subkey;     // Subkey bảo vệ phiên giao dịch
+    authenticator.seqNum = 1;         // Số thứ tự (có thể dùng cơ chế tăng dần cho mỗi lần gửi yêu cầu)
+
+    // Chuyển đổi thời gian TS2 thành chuỗi (ví dụ sử dụng thời gian Unix timestamp)
+    auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(authenticator.TS2.time_since_epoch()).count();
+
+    // Tạo chuỗi kết quả theo định dạng "clientID||realm||TS2||subkey||seqNum"
+    return authenticator.clientID + "||" +
+        authenticator.realmc + "||" +
+        std::to_string(timestamp) + "||" +
+        authenticator.subkey + "||" +
+        std::to_string(authenticator.seqNum);
+}
+
+void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, const info& serverInfo, const std::string& kcTgs, const std::string& iv) {
+    // Tách chuỗi nhận được thành các thành phần
+    std::vector<std::string> parts = splitString(tgsResponse, "||");
+
+    if (parts.size() < 4) {
+        throw std::invalid_argument("Invalid TGS response format");
+    }
+
+    // Phân tích từng thành phần
+    std::string realmC = parts[0];
+    std::string idC = parts[1];
+    std::string ticketV = parts[2];
+    std::string encryptedData = parts[3];
+
+    if (realmC != clientInfo.getRealm() || idC != clientInfo.getID()) {
+        throw std::runtime_error("Mismatch between TGS response and client information");
+    }
+
+    // Giải mã E(Kc,tgs, [...])
+    std::string decryptedData = aes_decrypt_cbc(encryptedData, kcTgs, iv);
+
+    // Tách dữ liệu đã giải mã
+    std::vector<std::string> decryptedParts = splitString(decryptedData, "||");
+    if (decryptedParts.size() < 7) {
+        throw std::invalid_argument("Invalid decrypted data format");
+    }
+
+    std::string kcv = decryptedParts[0];
+    std::string realmV = decryptedParts[5];  // Realm của Server V
+    std::string idV = decryptedParts[6];     // ID của Server V
+
+    // Kiểm tra xem realmV và idV có khớp với thông tin của serverV không
+    if (realmV != serverInfo.getRealm() || idV != serverInfo.getID()) {
+        throw std::invalid_argument("Realm or ID does not match server information");
+    }
+
+    // Phân tích các chuỗi thời gian từ decryptedParts
+    std::chrono::system_clock::time_point from = parseTimestamp(decryptedParts[1]);   // Thời gian bắt đầu hợp lệ
+    std::chrono::system_clock::time_point till = parseTimestamp(decryptedParts[2]);   // Thời gian hết hạn
+    std::chrono::system_clock::time_point rtime = parseTimestamp(decryptedParts[3]);  // Thời gian kiểm tra
+
+    // Lấy thời gian hiện tại
+    auto now = std::chrono::system_clock::now();
+
+    // Kiểm tra xem vé có còn hợp lệ không
+    if (now < from) {
+        throw std::invalid_argument("Ticket is not yet valid");
+    }
+    if (now > till) {
+        throw std::invalid_argument("Ticket has expired");
+    }
+
+
+    // Tạo đối tượng AuthenticatorC bằng cách gọi hàm riêng
+    std::string authenticator = createAuthenticator(clientInfo, decryptedParts[0]);
+
+    std::string authenticator_en = aes_decrypt_cbc(authenticator, kcv, iv);
+
+    // Tạo message gửi đi
+    std::string message = OPTION + "||" + ticketV + "||" + authenticator_en;
+
+    sendToServer(clientSocket, message);
 }
 
 int main() {
