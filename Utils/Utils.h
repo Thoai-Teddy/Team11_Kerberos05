@@ -31,6 +31,11 @@ private:
 public:
     info(const std::string& id, const std::string& realm)
         : id(id), realm(realm), ad(""), pub_key(""), pri_key("") {};
+    // Constructor để khởi tạo các giá trị
+    info(const std::string& id, const std::string& ad, const std::string& realm,
+        const std::string& pub_key, const std::string& pri_key)
+        : id(id), ad(ad), realm(realm), pub_key(pub_key), pri_key(pri_key) {}
+
     std::string getID() const;       
     std::string getAD() const;       
     std::string getRealm() const;  
@@ -53,6 +58,10 @@ struct ServiceTicket {
         std::chrono::system_clock::time_point rtime;  // Thời gian kiểm tra
     } timeInfo;
 };
+//Hàm lưu thông tin Ticket sau khi giải mã:
+ServiceTicket parseServiceTicket(const string& decryptedText);
+//Hàm in ServiceTicket:
+void printServiceTicket(const ServiceTicket& ticket);
 
 
 // Cấu trúc Bộ xác thực
@@ -63,6 +72,9 @@ struct AuthenticatorC {
     std::string subkey;    // Subkey bảo vệ phiên giao dịch
     uint32_t seqNum;       // Sequence number để tránh tấn công phát lại
 };
+//hàm lưu giá trị vào AuthenticatorC sau khi giải mã:
+AuthenticatorC parseAuthenticator(const string& decryptedText);
+
 
 // Hàm nhận và xử lý dữ liệu từ TGS
 struct TGSData {
@@ -86,7 +98,6 @@ struct TGSData {
         : realmC(rc), idC(id), ticketV(ticket), kcV(kc), timeInfo{ tf, tt, trt }, nonce2(n), realmV(rv), idV(iv) {}
 };
 
-//Step 6: Service Server reply to Client:
 // Cấu trúc Dữ liệu mã hóa Server gửi cho Client
 struct ServiceServerData {
     std::string clientID;        // Thông tin định danh Client
@@ -113,7 +124,8 @@ std::string createSubkey(const std::string& key, const std::string& data);
 
 
 
-
+// Hàm hỗ trợ: chuyển timestamp dạng chuỗi sang std::chrono::system_clock::time_point
+chrono::system_clock::time_point millisecTimestampToTimePoint(const string& timestampStr);
 
 //hash SHA1
 uint32_t left_rotate(uint32_t value, unsigned int count);
@@ -121,6 +133,7 @@ string sha1(const string& input);
 
 // Hàm chuyển byte thành chuỗi hexadecimal
 string bytesToHex(const vector<unsigned char>& bytes);
+std::vector<unsigned char> hexStringToVector(const std::string& hexStr);
 
 //AES-CBC:
 unsigned int bytesToWord(const unsigned char* bytes);
@@ -146,7 +159,23 @@ vector<unsigned char> padString(const string& input);
 string unpadString(const vector<unsigned char>& input);
 std::vector<unsigned char> hexStringToVector(const std::string& hexStr);
 
-std::vector<std::string> splitString(const std::string& input, const std::string& delimiter);
-std::chrono::system_clock::time_point parseTimestamp(const std::string& timestamp);
 //Step 6: Service Server reply to Client:
+string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const info& client, const string& iv, const string& priKeyV);
+// Hàm tách chuỗi bằng dấu '|' và gán vào các biến
+void splitAndAssign(const std::string& input, std::string& a, std::string& b, std::string& c);
+// Hàm tạo tin nhắn của Service server gửi cho Client
+std::string createServerServiceMessage(const ServiceServerData& service, const std::string subKey);
+//Hàm mã hóa tin để gửi đi
+string encryptServerServiceData(const ServiceServerData& service, const string subKey, string iv_str, string sessionKey);
+//Hàm chính của step 6:
+string processServiceResponse(const ServiceServerData& service, const string& decryptMessage, const info& client, const string& ivTicket,
+    const string& ivAuth, const string& priKeyV, string iv);
 
+//hàm tạo thông tin Service Ticket để test:
+uint64_t getCurrentTimestamp();
+std::string buildServiceTicketPlaintext(const std::string& flag,
+    const std::string& sessionKey,
+    const std::string& realmc,
+    const std::string& clientID,
+    const std::string& clientAD,
+    uint64_t from, uint64_t till, uint64_t rtime);
