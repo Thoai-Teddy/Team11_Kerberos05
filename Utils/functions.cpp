@@ -85,6 +85,9 @@ std::string info::getPublicKey() const {
     return pub_key;
 };
 
+void info::setPrivateKey(std::string privateKey) {
+    this->pri_key = privateKey;
+}
 
 // Hàm dịch bit trái
 uint32_t left_rotate(uint32_t value, unsigned int count) {
@@ -897,6 +900,63 @@ std::string buildServiceTicketPlaintext(const std::string& flag,
     return plaintext.str();
 }
 
+
+std::string generate_nonce(int length) {
+    std::random_device rd;
+    std::mt19937 gen(rd()); 
+    std::uniform_int_distribution<> dis(0, 255);
+
+    std::stringstream nonce;
+    for (int i = 0; i < length; ++i) {
+        unsigned char byte = static_cast<unsigned char>(dis(gen));
+        nonce << std::hex << std::setw(2) << std::setfill('0') << (int)byte;
+    }
+    return nonce.str();
+}
+
+// Hàm format thời gian thành string
+std::string get_current_time_formatted() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::gmtime(&now_c), "%Y%m%d%H%M%S"); // format: YYYYMMDDhhmmss
+    return ss.str();
+}
+
+std::string build_times(int ticket_lifetime, int renew_lifetime) {
+    std::string from = get_current_time_formatted();
+
+    // Till = From + ticket_lifetime tiếng (ticket có thể dùng trong ticket_lifetime tiếng)
+    auto till_time = std::chrono::system_clock::now() + std::chrono::hours(ticket_lifetime);
+    std::time_t till_c = std::chrono::system_clock::to_time_t(till_time);
+    std::stringstream ss_till;
+    ss_till << std::put_time(std::gmtime(&till_c), "%Y%m%d%H%M%S");
+    std::string till = ss_till.str();
+
+    // Rtime = Till + renew_lifetime tiếng (vé có thể gia hạn thêm renew_lifetime tiếng)
+    auto rtime_time = till_time + std::chrono::hours(renew_lifetime);
+    std::time_t rtime_c = std::chrono::system_clock::to_time_t(rtime_time);
+    std::stringstream ss_rtime;
+    ss_rtime << std::put_time(std::gmtime(&rtime_c), "%Y%m%d%H%M%S");
+    std::string rtime = ss_rtime.str();
+
+    // Ghép lại thành Times
+    return from + "|" + till + "|" + rtime;
+}
+
+void send_message(SOCKET sock, const std::string& message)
+{
+    send(sock, message.c_str(), message.size(), 0);
+}
+
+std::string receive_message(SOCKET sock) {
+    char buffer[4096];
+    int bytesReceived = recv(sock, buffer, sizeof(buffer), 0);
+    if (bytesReceived == SOCKET_ERROR) {
+        throw std::runtime_error("Receive failed");
+    }
+    return std::string(buffer, bytesReceived);
+}
 
 //int main() {
 //   std::string clientID1 = "client123";

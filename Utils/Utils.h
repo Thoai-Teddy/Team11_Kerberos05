@@ -15,6 +15,7 @@
 #include <string>
 #include <chrono>
 #include <ctime>
+#include <random>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -40,6 +41,7 @@ public:
     std::string getAD() const;       
     std::string getRealm() const;  
     std::string getPublicKey() const; 
+    void setPrivateKey(std::string privateKey);
 };
 
 
@@ -181,3 +183,38 @@ std::string buildServiceTicketPlaintext(const std::string& flag,
     const std::string& clientID,
     const std::string& clientAD,
     uint64_t from, uint64_t till, uint64_t rtime);
+
+
+// Cấu trúc  Ticket
+struct Ticket {
+    std::string clientID;        // Thông tin định danh Client
+    std::string flags;           // Các cờ (flags)
+    std::string sessionKey;      // Khóa phiên giữa Client và Server V
+    std::string clientAD;        // Thông tin định danh Client
+    std::string realmc;
+    std::string times_from;
+    std::string times_till;
+    std::string times_rtime;
+};
+
+//Hàm lưu thông tin Ticket sau khi giải mã:
+Ticket parseTicket(const string& decryptedText);
+//Hàm in ServiceTicket:
+void printTicket(const Ticket& ticket);
+
+std::string buildTicketPlaintext(const std::string& flag,
+    const std::string& sessionKey,
+    const std::string& realmc,
+    const std::string& clientID,
+    const std::string& clientAD,
+    uint64_t from, uint64_t till, uint64_t rtime);
+
+std::string generate_nonce(int length);
+
+std::string get_current_time_formatted();
+
+std::string build_times(int ticket_lifetime, int renew_lifetime);
+
+void send_message(SOCKET sock, const std::string& message);
+
+std::string receive_message(SOCKET sock);
