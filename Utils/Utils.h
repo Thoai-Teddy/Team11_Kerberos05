@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#define CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -28,6 +28,8 @@ private:
     std::string pri_key;
 
 public:
+    info(const std::string& id, const std::string& realm)
+        : id(id), realm(realm), ad(""), pub_key(""), pri_key("") {};
     std::string getID() const;       
     std::string getAD() const;       
     std::string getRealm() const;  
@@ -117,6 +119,7 @@ vector<unsigned char> aes_cbc_decrypt(const vector<unsigned char>& ciphertext, c
 
 vector<unsigned char> padString(const string& input);
 string unpadString(const vector<unsigned char>& input);
-
+string unpadString2(const vector<unsigned char>& input);
+std::vector<unsigned char> hexStringToVector(const std::string& hexStr);
 //Step 6: Service Server reply to Client:
 

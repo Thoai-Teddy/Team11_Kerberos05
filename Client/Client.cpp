@@ -1,5 +1,7 @@
 ﻿#include "../Utils/Utils.h"
 
+const int BLOCK_SIZE = 16;
+
 std::string OPTION = "";
 
 SOCKET clientSocket; // Để đóng socket khi cần
@@ -11,7 +13,7 @@ void handleCtrlC(int sig) {
     WSACleanup();
     exit(0);
 }
-
+/*
 void sendToServer(SOCKET clientSocket, const std::string& message) {
     // Gửi dữ liệu tới server
     int messageLength = static_cast<int>(message.size());
@@ -28,7 +30,8 @@ void sendToServer(SOCKET clientSocket, const std::string& message) {
         std::cout << "Message sent to server: " << message << std::endl;
     }
 }
-
+*/
+/*
 std::string createAuthenticator(const info& clientInfo, const std::string& subkey) {
     // Tạo đối tượng AuthenticatorC
     AuthenticatorC authenticator;
@@ -48,10 +51,11 @@ std::string createAuthenticator(const info& clientInfo, const std::string& subke
         authenticator.subkey + "||" +
         std::to_string(authenticator.seqNum);
 }
+*/
 
 void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, const info& serverInfo, const std::string& kcTgs, const std::string& iv) {
     // Tách chuỗi nhận được thành các thành phần
-    std::vector<std::string> parts = splitString(tgsResponse, "||");
+    std::vector<std::string> parts = splitString(tgsResponse, "|");
 
     if (parts.size() < 4) {
         throw std::invalid_argument("Invalid TGS response format");
@@ -59,170 +63,256 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
 
     // Phân tích từng thành phần
     std::string realmC = parts[0];
+    std::cout << "RealmC " << realmC << std::endl;
     std::string idC = parts[1];
+    std::cout << "idC " << idC << std::endl;
     std::string ticketV = parts[2];
+    std::cout << "ticketV " << ticketV << std::endl;
     std::string encryptedData = parts[3];
-    vector<unsigned char> encryptedData_vec = padString(encryptedData);
-
+    std::cout << "encryptedData: " << encryptedData << std::endl;
+    vector<unsigned char> encryptedData_vec = hexStringToVector(encryptedData);
+    cout << "encryptedData_vec: ";
+    for (unsigned char c : encryptedData_vec) {
+        printf("%02X", c);
+    }
+    cout << endl;
     if (realmC != clientInfo.getRealm() || idC != clientInfo.getID()) {
         throw std::runtime_error("Mismatch between TGS response and client information");
     }
 
-    vector<unsigned char> kcTgs_vec = padString(kcTgs);
-    vector<unsigned char> iv_vec = padString(iv);
-
+    vector<unsigned char> kcTgs_vec(kcTgs.begin(), kcTgs.end());
+    std::cout << "kcTgs: " << kcTgs << std::endl;
+    cout << "kcTgs_vec: ";
+    for (unsigned char c : kcTgs_vec) {
+        printf("%02X", c);
+    }
+    cout << endl;
+    vector<unsigned char> iv_vec(iv.begin(), iv.end());
+    std::cout << "iv: " << iv << std::endl;
+    cout << "iv_vec: ";
+    for (unsigned char c : iv_vec) {
+        printf("%02X", c);
+    }
+    cout << endl;
     // Giải mã E(Kc,tgs, [...])
     vector<unsigned char> decryptedData_vec = aes_cbc_decrypt(encryptedData_vec, kcTgs_vec, iv_vec);
-    std::string decryptedData = unpadString(decryptedData_vec);
+
+    std::string decryptedData(decryptedData_vec.begin(), decryptedData_vec.end());
+    std::cout << "decryptedData: " << decryptedData << std::endl;
 
     // Tách dữ liệu đã giải mã
-    std::vector<std::string> decryptedParts = splitString(decryptedData, "||");
+    std::vector<std::string> decryptedParts = splitString(decryptedData, "|");
     if (decryptedParts.size() < 7) {
         throw std::invalid_argument("Invalid decrypted data format");
     }
 
-    std::string kcv = decryptedParts[0];
-    std::string realmV = decryptedParts[5];  // Realm của Server V
-    std::string idV = decryptedParts[6];     // ID của Server V
-
-    vector<unsigned char> kcv_vec = padString(kcv);
-
-    // Kiểm tra xem realmV và idV có khớp với thông tin của serverV không
-    if (realmV != serverInfo.getRealm() || idV != serverInfo.getID()) {
-        throw std::invalid_argument("Realm or ID does not match server information");
-    }
-
-    // Phân tích các chuỗi thời gian từ decryptedParts
-    std::chrono::system_clock::time_point from = parseTimestamp(decryptedParts[1]);   // Thời gian bắt đầu hợp lệ
-    std::chrono::system_clock::time_point till = parseTimestamp(decryptedParts[2]);   // Thời gian hết hạn
-    std::chrono::system_clock::time_point rtime = parseTimestamp(decryptedParts[3]);  // Thời gian kiểm tra
-
-    // Lấy thời gian hiện tại
-    auto now = std::chrono::system_clock::now();
-
-    // Kiểm tra xem vé có còn hợp lệ không
-    if (now < from) {
-        throw std::invalid_argument("Ticket is not yet valid");
-    }
-    if (now > till) {
-        throw std::invalid_argument("Ticket has expired");
+    for (size_t i = 0; i < decryptedParts.size(); ++i) {
+        std::cout << "Part " << i + 1 << ": " << decryptedParts[i] << std::endl;
     }
 
 
-    // Tạo đối tượng AuthenticatorC bằng cách gọi hàm riêng
-    std::string authenticator = createAuthenticator(clientInfo, decryptedParts[0]);
-    vector<unsigned char> authenticator_vec = padString(authenticator);
+    //std::string kcv = decryptedParts[0];
+    //std::string realmV = decryptedParts[5];  // Realm của Server V
+    //std::string idV = decryptedParts[6];     // ID của Server V
 
-    vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
+    //vector<unsigned char> kcv_vec = padString(kcv);
 
-    std::string authenticator_en = unpadString(authenticator_en_vec);
+    //// Kiểm tra xem realmV và idV có khớp với thông tin của serverV không
+    //if (realmV != serverInfo.getRealm() || idV != serverInfo.getID()) {
+    //    throw std::invalid_argument("Realm or ID does not match server information");
+    //}
 
-    // Tạo message gửi đi
-    std::string message = OPTION + "||" + ticketV + "||" + authenticator_en;
+    //// Phân tích các chuỗi thời gian từ decryptedParts
+    //std::chrono::system_clock::time_point from = parseTimestamp(decryptedParts[1]);   // Thời gian bắt đầu hợp lệ
+    //std::chrono::system_clock::time_point till = parseTimestamp(decryptedParts[2]);   // Thời gian hết hạn
+    //std::chrono::system_clock::time_point rtime = parseTimestamp(decryptedParts[3]);  // Thời gian kiểm tra
 
-    sendToServer(clientSocket, message);
+    //// Lấy thời gian hiện tại
+    //auto now = std::chrono::system_clock::now();
+
+    //// Kiểm tra xem vé có còn hợp lệ không
+    //if (now < from) {
+    //    throw std::invalid_argument("Ticket is not yet valid");
+    //}
+    //if (now > till) {
+    //    throw std::invalid_argument("Ticket has expired");
+    //}
+
+
+    //// Tạo đối tượng AuthenticatorC bằng cách gọi hàm riêng
+    //std::string authenticator = createAuthenticator(clientInfo, decryptedParts[0]);
+    //vector<unsigned char> authenticator_vec = padString(authenticator);
+
+    //vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
+
+    //std::string authenticator_en = unpadString(authenticator_en_vec);
+
+    //// Tạo message gửi đi
+    //std::string message = OPTION + "|" + ticketV + "|" + authenticator_en;
+
+    //sendToServer(clientSocket, message);
 }
 
+std::string timePointToString(const std::chrono::system_clock::time_point& tp) {
+    std::time_t time = std::chrono::system_clock::to_time_t(tp);
+    std::tm* tm = std::localtime(&time);  // Chuyển đổi thành tm cấu trúc
+    std::ostringstream oss;
+
+    // Tạo chuỗi thời gian theo định dạng YYYY-MM-DD HH:MM:SS
+    oss << (tm->tm_year + 1900) << "-"
+        << (tm->tm_mon + 1) << "-"
+        << tm->tm_mday << " "
+        << tm->tm_hour << ":"
+        << tm->tm_min << ":"
+        << tm->tm_sec;
+
+    return oss.str();
+}
+
+
 int main() {
-    WSADATA wsaData;
-    sockaddr_in serverAddr;
-    char buffer[1024];
+    //WSADATA wsaData;
+    //sockaddr_in serverAddr;
+    //char buffer[1024];
 
-    // Bắt Ctrl+C
-    signal(SIGINT, handleCtrlC);
+    //// Bắt Ctrl+C
+    //signal(SIGINT, handleCtrlC);
 
-    // Khởi tạo Winsock
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        cerr << "WSAStartup failed." << endl;
-        return 1;
+    //// Khởi tạo Winsock
+    //if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    //    cerr << "WSAStartup failed." << endl;
+    //    return 1;
+    //}
+
+    //// Tạo socket
+    //clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    //if (clientSocket == INVALID_SOCKET) {
+    //    cerr << "Socket creation failed." << endl;
+    //    WSACleanup();
+    //    return 1;
+    //}
+
+    //// Cấu hình server
+    //serverAddr.sin_family = AF_INET;
+    //serverAddr.sin_port = htons(8800); // Kết nối tới cổng 8800 của AS Server
+    //inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr); // Hoặc đổi IP khác nếu cần
+
+    //// Kết nối server
+    //if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+    //    cerr << "Connection to server failed." << endl;
+    //    closesocket(clientSocket);
+    //    WSACleanup();
+    //    return 1;
+    //}
+
+    //cout << "Connected to AS Server." << endl;
+
+    //// Gửi username tới AS Server
+    //cout << "Enter username: ";
+    //cin.getline(buffer, sizeof(buffer));
+    //send(clientSocket, buffer, strlen(buffer), 0);
+
+    //// Nhận TGT từ AS Server
+    //memset(buffer, 0, sizeof(buffer)); // Clear buffer
+    //int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    //if (bytesReceived > 0) {
+    //    cout << "Received TGT: " << buffer << endl;
+    //}
+
+    //// Đóng kết nối với AS Server
+    //closesocket(clientSocket);
+
+    //// Kết nối tới TGS Server
+    //clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    //serverAddr.sin_port = htons(8801); // Kết nối tới cổng 8801 của TGS Server
+
+    //if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+    //    cerr << "Connection to TGS failed." << endl;
+    //    closesocket(clientSocket);
+    //    WSACleanup();
+    //    return 1;
+    //}
+
+    //// Gửi TGT tới TGS Server
+    //send(clientSocket, buffer, strlen(buffer), 0);
+
+    //// Nhận Service Ticket từ TGS Server
+    //memset(buffer, 0, sizeof(buffer)); // Clear buffer
+    //bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    //if (bytesReceived > 0) {
+    //    cout << "Received Service Ticket: " << buffer << endl;
+    //}
+
+    //// Đóng kết nối với TGS Server
+    //closesocket(clientSocket);
+
+    //// Kết nối tới Service Server
+    //clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    //serverAddr.sin_port = htons(8802); // Kết nối tới cổng 8802 của Service Server
+
+    //if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+    //    cerr << "Connection to Service Server failed." << endl;
+    //    closesocket(clientSocket);
+    //    WSACleanup();
+    //    return 1;
+    //}
+
+    //// Gửi Service Ticket tới Service Server
+    //send(clientSocket, buffer, strlen(buffer), 0);
+
+    //// Nhận dữ liệu từ Service Server
+    //memset(buffer, 0, sizeof(buffer)); // Clear buffer
+    //bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    //if (bytesReceived > 0) {
+    //    cout << "Received Service Data: " << buffer << endl;
+    //}
+
+    //// Đóng kết nối với Service Server
+    //closesocket(clientSocket);
+    //WSACleanup();
+    auto now = std::chrono::system_clock::now();
+    auto future = now + std::chrono::hours(1);  // Thời gian hết hạn là 1 giờ sau
+    auto past = now - std::chrono::hours(1);
+    std::string nowStr = timePointToString(now);
+    std::string futureStr = timePointToString(future);
+    std::string pastStr = timePointToString(past);
+
+    std::string plaintext = "khoaphienCServerV|" + nowStr + "|" + futureStr + "|" + pastStr + "|" + nowStr + "|" + "RealmServerV|IDServerV";
+    cout << "plaintext: " << plaintext << endl;
+    string key_input = "khoaphienCTGS123";
+
+    if (key_input.size() > BLOCK_SIZE) {
+        key_input = key_input.substr(0, BLOCK_SIZE);
     }
+    vector<unsigned char> key(key_input.begin(), key_input.end());
+    while (key.size() < BLOCK_SIZE) key.push_back(0x00); // Bổ sung nếu thiếu
 
-    // Tạo socket
-    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (clientSocket == INVALID_SOCKET) {
-        cerr << "Socket creation failed." << endl;
-        WSACleanup();
-        return 1;
+    string iv_pre = "1234567890abcdef";
+    if (iv_pre.size() > BLOCK_SIZE) {
+        iv_pre = iv_pre.substr(0, BLOCK_SIZE);
     }
+    vector<unsigned char> iv(iv_pre.begin(), iv_pre.end());
+    while (iv.size() < BLOCK_SIZE) iv.push_back(0x00); // Bổ sung nếu thiếu
 
-    // Cấu hình server
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(8800); // Kết nối tới cổng 8800 của AS Server
-    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr); // Hoặc đổi IP khác nếu cần
+    // Padding plaintext
+    vector<unsigned char> padded_plaintext = padString(plaintext);
 
-    // Kết nối server
-    if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        cerr << "Connection to server failed." << endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
+    // Mã hóa
+    vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, key, iv);
+    string cipher = bytesToHex(ciphertext);
+
+    // In ciphertext dạng hex
+    cout << "Ciphertext (hex): ";
+    for (unsigned char c : ciphertext) {
+        printf("%02X", c);
     }
+    cout << "cipher: " << cipher << endl;
+    cout << endl;
 
-    cout << "Connected to AS Server." << endl;
-
-    // Gửi username tới AS Server
-    cout << "Enter username: ";
-    cin.getline(buffer, sizeof(buffer));
-    send(clientSocket, buffer, strlen(buffer), 0);
-
-    // Nhận TGT từ AS Server
-    memset(buffer, 0, sizeof(buffer)); // Clear buffer
-    int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-    if (bytesReceived > 0) {
-        cout << "Received TGT: " << buffer << endl;
-    }
-
-    // Đóng kết nối với AS Server
-    closesocket(clientSocket);
-
-    // Kết nối tới TGS Server
-    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    serverAddr.sin_port = htons(8801); // Kết nối tới cổng 8801 của TGS Server
-
-    if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        cerr << "Connection to TGS failed." << endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
-    }
-
-    // Gửi TGT tới TGS Server
-    send(clientSocket, buffer, strlen(buffer), 0);
-
-    // Nhận Service Ticket từ TGS Server
-    memset(buffer, 0, sizeof(buffer)); // Clear buffer
-    bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-    if (bytesReceived > 0) {
-        cout << "Received Service Ticket: " << buffer << endl;
-    }
-
-    // Đóng kết nối với TGS Server
-    closesocket(clientSocket);
-
-    // Kết nối tới Service Server
-    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    serverAddr.sin_port = htons(8802); // Kết nối tới cổng 8802 của Service Server
-
-    if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        cerr << "Connection to Service Server failed." << endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
-    }
-
-    // Gửi Service Ticket tới Service Server
-    send(clientSocket, buffer, strlen(buffer), 0);
-
-    // Nhận dữ liệu từ Service Server
-    memset(buffer, 0, sizeof(buffer)); // Clear buffer
-    bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-    if (bytesReceived > 0) {
-        cout << "Received Service Data: " << buffer << endl;
-    }
-
-    // Đóng kết nối với Service Server
-    closesocket(clientSocket);
-    WSACleanup();
-
+    info client("IDCLient", "realmClient");
+    info server("IDServerV", "RealmServerV");
+    std::string data = "realmClient|IDCLient|TicketServerVdamahoa|"  + cipher;
+    cout << "data: " << data << std::endl;
+    processTGSResponse(data, client, server, key_input, iv_pre);
     return 0;
 }

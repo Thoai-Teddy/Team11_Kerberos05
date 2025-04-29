@@ -1,8 +1,8 @@
-﻿#include "Utils.h"
+﻿#include "./Utils.h"
 
 const int BLOCK_SIZE = 16;
-const int Nr = 10;
-const int Nk = 4;
+const int Nk = 4;          // 8 words * 4 bytes = 32 bytes = 256 bits
+const int Nr = 10;         // 14 rounds cho AES-256
 
 // AES S-box
 unsigned char sbox[256] = {
@@ -71,19 +71,19 @@ unsigned char rsbox[256] = {
 
 std::string info::getID() const {
     return id;
-}
+};
 
 std::string info::getAD() const {
     return ad;
-}
+};
 
 std::string info::getRealm() const {
     return realm;
-}
+};
 
 std::string info::getPublicKey() const {
     return pub_key;
-}
+};
 
 
 
@@ -296,30 +296,38 @@ void KeyExpansion(const unsigned char* key, unsigned char* roundKeys) {
             // XOR with Rcon
             temp ^= (Rcon[i / Nk] << 24);
         }
+        else if (Nk > 6 && i % Nk == 4) {
+            // Thêm SubWord nếu AES-256
+            unsigned char t[4];
+            wordToBytes(temp, t);
+            t[0] = sbox[t[0]];
+            t[1] = sbox[t[1]];
+            t[2] = sbox[t[2]];
+            t[3] = sbox[t[3]];
+            temp = bytesToWord(t);
+        }
         w[i] = w[i - Nk] ^ temp;
     }
 }
 void aes_encrypt_block(unsigned char* block, const unsigned char* key) {
-    unsigned char roundKeys[176]; // 16 * (Nr+1)
+    unsigned char roundKeys[240];
     KeyExpansion(key, roundKeys);
 
-    unsigned char state[BLOCK_SIZE];
-    memcpy(state, block, BLOCK_SIZE);
-
-    AddRoundKey(state, roundKeys);
+    AddRoundKey(block, roundKeys);
 
     for (int round = 1; round < Nr; round++) {
-        SubBytes(state);
-        ShiftRows(state);
-        MixColumns(state);
-        AddRoundKey(state, roundKeys + round * BLOCK_SIZE);
+        SubBytes(block);
+        ShiftRows(block);
+        MixColumns(block);
+        AddRoundKey(block, roundKeys + round * BLOCK_SIZE);
     }
-    SubBytes(state);
-    ShiftRows(state);
-    AddRoundKey(state, roundKeys + Nr * BLOCK_SIZE);
 
-    memcpy(block, state, BLOCK_SIZE);
+    // Round cuối không có MixColumns
+    SubBytes(block);
+    ShiftRows(block);
+    AddRoundKey(block, roundKeys + Nr * BLOCK_SIZE);
 }
+
 
 void xor_blocks(unsigned char* dst, const unsigned char* src) {
     for (int i = 0; i < BLOCK_SIZE; i++) {
@@ -443,7 +451,7 @@ void unpadding(vector<unsigned char>& data) {
     data.resize(data.size() - pad_len);
 }
 void aes_decrypt_block(unsigned char* block, const unsigned char* key) {
-    unsigned char roundKeys[176];
+    unsigned char roundKeys[240]; // AES-256
     KeyExpansion(key, roundKeys);
 
     unsigned char state[BLOCK_SIZE];
@@ -470,6 +478,22 @@ vector<unsigned char> aes_cbc_decrypt(
     const vector<unsigned char>& key,
     const vector<unsigned char>& iv
 ) {
+    std::cout << "Vo giai ma ne##############################################" << std::endl;
+    cout << "ciphertext: ";
+    for (unsigned char c : ciphertext) {
+        printf("%02X", c);
+    }
+    cout << endl;
+    cout << "key: ";
+    for (unsigned char c : key) {
+        printf("%02X", c);
+    }
+    cout << endl;
+    cout << "iv: ";
+    for (unsigned char c : iv) {
+        printf("%02X", c);
+    }
+    cout << endl;
     vector<unsigned char> plaintext;
     unsigned char prev_block[BLOCK_SIZE];
     memcpy(prev_block, iv.data(), BLOCK_SIZE);
@@ -489,6 +513,11 @@ vector<unsigned char> aes_cbc_decrypt(
     }
 
     unpadding(plaintext);
+
+    std::cout << "xong giai ma ne" << std::endl;
+    std::string plaintext_str(plaintext.begin(), plaintext.end());
+    std::cout << "plaintext: " << plaintext_str << std::endl;
+
     return plaintext;
 }
 
@@ -510,7 +539,7 @@ string unpadString(const vector<unsigned char>& input) {
 
 
 
-// Hàm tách chuỗi dựa trên dấu phân cách
+// hàm tách chuỗi dựa trên dấu phân cách
 std::vector<std::string> splitString(const std::string& input, const std::string& delimiter) {
     std::vector<std::string> tokens;
     size_t start = 0, end = 0;
@@ -526,58 +555,74 @@ std::chrono::system_clock::time_point parseTimestamp(const std::string& timestam
     std::tm tm = {};
     std::istringstream ss(timestamp);
 
-    // Đọc chuỗi theo định dạng ngày giờ
-    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S"); // Định dạng tương ứng với chuỗi nhập vào
+    // đọc chuỗi theo định dạng ngày giờ
+    ss >> std::get_time(&tm, "%y-%m-%d %h:%m:%s"); // định dạng tương ứng với chuỗi nhập vào
     if (ss.fail()) {
-        throw std::invalid_argument("Invalid timestamp format");
+        throw std::invalid_argument("invalid timestamp format");
     }
 
-    std::time_t time = std::mktime(&tm);  // Chuyển std::tm thành time_t
-    return std::chrono::system_clock::from_time_t(time);  // Chuyển time_t thành time_point
+    std::time_t time = std::mktime(&tm);  // chuyển std::tm thành time_t
+    return std::chrono::system_clock::from_time_t(time);  // chuyển time_t thành time_point
 }
 
 
-int main() {
-    // Nhập plaintext từ người dùng
-    cout << "Nhap plaintext: ";
-    string plaintext;
-    getline(cin, plaintext);
-
-    // Nhập key (giả sử key 16 bytes)
-    cout << "Nhap key (toi da 16 ky tu): ";
-    string key_input;
-    getline(cin, key_input);
-
-    if (key_input.size() > BLOCK_SIZE) {
-        key_input = key_input.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> key(key_input.begin(), key_input.end());
-    while (key.size() < BLOCK_SIZE) key.push_back(0x00); // Bổ sung nếu thiếu
-
-    // IV khởi tạo ngẫu nhiên hoặc cố định (ví dụ cố định 16 bytes toàn số 0)
-    vector<unsigned char> iv(BLOCK_SIZE, 0x00);
-
-    // Padding plaintext
-    vector<unsigned char> padded_plaintext = padString(plaintext);
-
-    // Mã hóa
-    vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, key, iv);
-
-    // In ciphertext dạng hex
-    cout << "Ciphertext (hex): ";
-    for (unsigned char c : ciphertext) {
-        printf("%02X", c);
-    }
-    cout << endl;
-
-    // Giải mã
-    vector<unsigned char> decrypted_padded_plaintext = aes_cbc_decrypt(ciphertext, key, iv);
-
-    // Gỡ padding
-    string decrypted_plaintext = unpadString(decrypted_padded_plaintext);
-
-    // In plaintext sau giải mã
-    cout << "Plaintext sau khi giai ma: " << decrypted_plaintext << endl;
-
-    return 0;
+string unpadString2(const vector<unsigned char>& input) {
+    return string(input.begin(), input.end());
 }
+
+std::vector<unsigned char> hexStringToVector(const std::string& hexStr) {
+    std::vector<unsigned char> bytes;
+    for (size_t i = 0; i < hexStr.length(); i += 2) {
+        std::string byteString = hexStr.substr(i, 2);
+        unsigned char byte = (unsigned char)strtol(byteString.c_str(), nullptr, 16);
+        bytes.push_back(byte);
+    }
+    return bytes;
+}
+
+
+//int main() {
+//    // Nhập plaintext từ người dùng
+//    cout << "Nhap plaintext: ";
+//    string plaintext;
+//    getline(cin, plaintext);
+//
+//    // Nhập key (giả sử key 16 bytes)
+//    cout << "Nhap key (toi da 16 ky tu): ";
+//    string key_input;
+//    getline(cin, key_input);
+//
+//    if (key_input.size() > BLOCK_SIZE) {
+//        key_input = key_input.substr(0, BLOCK_SIZE);
+//    }
+//    vector<unsigned char> key(key_input.begin(), key_input.end());
+//    while (key.size() < BLOCK_SIZE) key.push_back(0x00); // Bổ sung nếu thiếu
+//
+//    // IV khởi tạo ngẫu nhiên hoặc cố định (ví dụ cố định 16 bytes toàn số 0)
+//    vector<unsigned char> iv(BLOCK_SIZE, 0x00);
+//
+//    // Padding plaintext
+//    vector<unsigned char> padded_plaintext = padString(plaintext);
+//
+//    // Mã hóa
+//    vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, key, iv);
+//
+//    // In ciphertext dạng hex
+//    cout << "Ciphertext (hex): ";
+//    for (unsigned char c : ciphertext) {
+//        printf("%02X", c);
+//    }
+//    cout << endl;
+//
+//    // Giải mã
+//    vector<unsigned char> decrypted_padded_plaintext = aes_cbc_decrypt(ciphertext, key, iv);
+//
+//    // Gỡ padding
+//    string decrypted_plaintext = unpadString(decrypted_padded_plaintext);
+//
+//    // In plaintext sau giải mã
+//    cout << "Plaintext sau khi giai ma: " << decrypted_plaintext << endl;
+//
+//    return 0;
+//}
+
