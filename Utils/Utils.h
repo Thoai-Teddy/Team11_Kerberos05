@@ -133,7 +133,6 @@ string sha1(const string& input);
 
 // Hàm chuyển byte thành chuỗi hexadecimal
 string bytesToHex(const vector<unsigned char>& bytes);
-std::vector<unsigned char> hexStringToVector(const std::string& hexStr);
 
 //AES-CBC:
 unsigned int bytesToWord(const unsigned char* bytes);
@@ -158,6 +157,9 @@ vector<unsigned char> aes_cbc_decrypt(const vector<unsigned char>& ciphertext, c
 vector<unsigned char> padString(const string& input);
 string unpadString(const vector<unsigned char>& input);
 std::vector<unsigned char> hexStringToVector(const std::string& hexStr);
+std::vector<std::string> splitString(const std::string& input, const std::string& delimiter);
+std::chrono::system_clock::time_point parseTimestamp(const std::string& timestamp);
+std::string trim(const std::string& s);
 
 //Step 6: Service Server reply to Client:
 string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const info& client, const string& iv, const string& priKeyV);

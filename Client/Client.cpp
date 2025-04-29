@@ -63,53 +63,28 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
 
     // Phân tích từng thành phần
     std::string realmC = parts[0];
-    std::cout << "RealmC " << realmC << std::endl;
     std::string idC = parts[1];
-    std::cout << "idC " << idC << std::endl;
     std::string ticketV = parts[2];
-    std::cout << "ticketV " << ticketV << std::endl;
     std::string encryptedData = parts[3];
-    std::cout << "encryptedData: " << encryptedData << std::endl;
+
     vector<unsigned char> encryptedData_vec = hexStringToVector(encryptedData);
-    cout << "encryptedData_vec: ";
-    for (unsigned char c : encryptedData_vec) {
-        printf("%02X", c);
-    }
-    cout << endl;
     if (realmC != clientInfo.getRealm() || idC != clientInfo.getID()) {
         throw std::runtime_error("Mismatch between TGS response and client information");
     }
 
     vector<unsigned char> kcTgs_vec(kcTgs.begin(), kcTgs.end());
-    std::cout << "kcTgs: " << kcTgs << std::endl;
-    cout << "kcTgs_vec: ";
-    for (unsigned char c : kcTgs_vec) {
-        printf("%02X", c);
-    }
-    cout << endl;
     vector<unsigned char> iv_vec(iv.begin(), iv.end());
-    std::cout << "iv: " << iv << std::endl;
-    cout << "iv_vec: ";
-    for (unsigned char c : iv_vec) {
-        printf("%02X", c);
-    }
-    cout << endl;
+
     // Giải mã E(Kc,tgs, [...])
     vector<unsigned char> decryptedData_vec = aes_cbc_decrypt(encryptedData_vec, kcTgs_vec, iv_vec);
 
-    std::string decryptedData(decryptedData_vec.begin(), decryptedData_vec.end());
-    std::cout << "decryptedData: " << decryptedData << std::endl;
+    std::string decryptedData = unpadString(decryptedData_vec);
 
     // Tách dữ liệu đã giải mã
     std::vector<std::string> decryptedParts = splitString(decryptedData, "|");
     if (decryptedParts.size() < 7) {
         throw std::invalid_argument("Invalid decrypted data format");
     }
-
-    for (size_t i = 0; i < decryptedParts.size(); ++i) {
-        std::cout << "Part " << i + 1 << ": " << decryptedParts[i] << std::endl;
-    }
-
 
     std::string kcv = decryptedParts[0];
     std::string realmV = decryptedParts[5];  // Realm của Server V
@@ -121,10 +96,10 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
     }
 
     // Phân tích các chuỗi thời gian từ decryptedParts
-    std::chrono::system_clock::time_point from = parseTimestamp(decryptedParts[1]);   // Thời gian bắt đầu hợp lệ
-    std::chrono::system_clock::time_point till = parseTimestamp(decryptedParts[2]);   // Thời gian hết hạn
-    std::chrono::system_clock::time_point rtime = parseTimestamp(decryptedParts[3]);  // Thời gian kiểm tra
-
+    std::chrono::system_clock::time_point from = std::chrono::system_clock::time_point(std::chrono::seconds(std::stoll(decryptedParts[1])));   // Thời gian bắt đầu hợp lệ
+    std::chrono::system_clock::time_point till = std::chrono::system_clock::time_point(std::chrono::seconds(std::stoll(decryptedParts[2])));   // Thời gian hết hạn
+    std::chrono::system_clock::time_point rtime = std::chrono::system_clock::time_point(std::chrono::seconds(std::stoll(decryptedParts[3])));  // Thời gian kiểm tra
+    
     // Lấy thời gian hiện tại
     auto now = std::chrono::system_clock::now();
 
@@ -140,31 +115,15 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
     // Tạo đối tượng AuthenticatorC bằng cách gọi hàm riêng
     std::string authenticator = createAuthenticator(clientInfo, kcv);
     vector<unsigned char> authenticator_vec = padString(authenticator);
-
     if (kcv.size() > BLOCK_SIZE) {
         kcv = kcv.substr(0, BLOCK_SIZE);
     }
     vector<unsigned char> kcv_vec(kcv.begin(), kcv.end());
     while (kcv_vec.size() < BLOCK_SIZE) kcv_vec.push_back(0x00); // Bổ sung nếu thiếu
 
-    std::string iv_t = iv;
-    if (iv_t.size() > BLOCK_SIZE) {
-        iv_t = iv_t.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> iv_vec(iv_t.begin(), iv_t.end());
-
     vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
 
     std::string authenticator_en = bytesToHex(authenticator_en_vec);
-
-    cout << "authenticator_en_vec (hex): ";
-    for (unsigned char c : authenticator_en_vec) {
-        printf("%02X", c);
-    }
-    cout << endl;
-    cout << "authenticator_en: " << authenticator_en << endl;
-    cout << endl;
-
     //// Tạo message gửi đi
     //std::string message = OPTION + "|" + ticketV + "|" + authenticator_en;
 
@@ -291,11 +250,11 @@ int main() {
     auto now = std::chrono::system_clock::now();
     auto future = now + std::chrono::hours(1);  // Thời gian hết hạn là 1 giờ sau
     auto past = now - std::chrono::hours(1);
-    std::string nowStr = timePointToString(now);
-    std::string futureStr = timePointToString(future);
-    std::string pastStr = timePointToString(past);
+    auto nowTs = std::to_string(std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+    auto futureTs = std::to_string(std::chrono::duration_cast<std::chrono::seconds>(future.time_since_epoch()).count());
+    auto pastTs = std::to_string(std::chrono::duration_cast<std::chrono::seconds>(past.time_since_epoch()).count());
 
-    std::string plaintext = "khoaphienCServerV|" + nowStr + "|" + futureStr + "|" + pastStr + "|" + nowStr + "|" + "RealmServerV|IDServerV";
+    std::string plaintext = "khoaphienCServerV|" + nowTs + "|" + futureTs + "|" + pastTs + "|" + nowTs + "|" + "RealmServerV|IDServerV";
     cout << "plaintext: " << plaintext << endl;
     string key_input = "khoaphienCTGS123";
 
