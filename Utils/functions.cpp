@@ -523,9 +523,17 @@ std::vector<std::string> splitString(const std::string& input, const std::string
 }
 
 std::chrono::system_clock::time_point parseTimestamp(const std::string& timestamp) {
-    // Replace this with the actual implementation to convert string to time_point
-    std::time_t time = std::stoll(timestamp); // Example: convert string to long long and then to time_t
-    return std::chrono::system_clock::from_time_t(time);
+    std::tm tm = {};
+    std::istringstream ss(timestamp);
+
+    // Đọc chuỗi theo định dạng ngày giờ
+    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S"); // Định dạng tương ứng với chuỗi nhập vào
+    if (ss.fail()) {
+        throw std::invalid_argument("Invalid timestamp format");
+    }
+
+    std::time_t time = std::mktime(&tm);  // Chuyển std::tm thành time_t
+    return std::chrono::system_clock::from_time_t(time);  // Chuyển time_t thành time_point
 }
 
 
