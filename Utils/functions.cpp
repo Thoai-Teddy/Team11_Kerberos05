@@ -608,15 +608,26 @@ std::string createSubkey(const std::string& key, const std::string& data) { // d
     return hash_result;
 }
 
+std::vector<unsigned char> hexStringToVector(const std::string& hexStr) {
+    std::vector<unsigned char> bytes;
+    for (size_t i = 0; i < hexStr.length(); i += 2) {
+        std::string byteString = hexStr.substr(i, 2);
+        unsigned char byte = (unsigned char)strtol(byteString.c_str(), nullptr, 16);
+        bytes.push_back(byte);
+    }
+    return bytes;
+}
 
 
-int main() {
-    chrono::system_clock::time_point tnow = createTS2();
-    string stime = timeToString(tnow);
-    cout << "TS2: " << stime << endl;
 
-    string key = "mysecretkey";
-    // Tạo subkey
-    string subkey = createSubkey(key, stime);
-    cout << "Subkey: " << subkey << endl;
-
+//int main() {
+//    chrono::system_clock::time_point tnow = createTS2();
+//    string stime = timeToString(tnow);
+//    cout << "TS2: " << stime << endl;
+//
+//    string key = "mysecretkey";
+//    // Tạo subkey
+//    string subkey = createSubkey(key, stime);
+//    cout << "Subkey: " << subkey << endl;
+//
+//}

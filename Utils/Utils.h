@@ -144,7 +144,9 @@ vector<unsigned char> aes_cbc_decrypt(const vector<unsigned char>& ciphertext, c
 
 vector<unsigned char> padString(const string& input);
 string unpadString(const vector<unsigned char>& input);
-string unpadString2(const vector<unsigned char>& input);
 std::vector<unsigned char> hexStringToVector(const std::string& hexStr);
+
+std::vector<std::string> splitString(const std::string& input, const std::string& delimiter);
+std::chrono::system_clock::time_point parseTimestamp(const std::string& timestamp);
 //Step 6: Service Server reply to Client:
 

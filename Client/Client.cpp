@@ -31,7 +31,7 @@ void sendToServer(SOCKET clientSocket, const std::string& message) {
     }
 }
 */
-/*
+
 std::string createAuthenticator(const info& clientInfo, const std::string& subkey) {
     // Tạo đối tượng AuthenticatorC
     AuthenticatorC authenticator;
@@ -45,13 +45,13 @@ std::string createAuthenticator(const info& clientInfo, const std::string& subke
     auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(authenticator.TS2.time_since_epoch()).count();
 
     // Tạo chuỗi kết quả theo định dạng "clientID||realm||TS2||subkey||seqNum"
-    return authenticator.clientID + "||" +
-        authenticator.realmc + "||" +
-        std::to_string(timestamp) + "||" +
-        authenticator.subkey + "||" +
+    return authenticator.clientID + "|" +
+        authenticator.realmc + "|" +
+        std::to_string(timestamp) + "|" +
+        authenticator.subkey + "|" +
         std::to_string(authenticator.seqNum);
 }
-*/
+
 
 void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, const info& serverInfo, const std::string& kcTgs, const std::string& iv) {
     // Tách chuỗi nhận được thành các thành phần
@@ -111,41 +111,59 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
     }
 
 
-    //std::string kcv = decryptedParts[0];
-    //std::string realmV = decryptedParts[5];  // Realm của Server V
-    //std::string idV = decryptedParts[6];     // ID của Server V
+    std::string kcv = decryptedParts[0];
+    std::string realmV = decryptedParts[5];  // Realm của Server V
+    std::string idV = decryptedParts[6];     // ID của Server V
 
-    //vector<unsigned char> kcv_vec = padString(kcv);
+    // Kiểm tra xem realmV và idV có khớp với thông tin của serverV không
+    if (realmV != serverInfo.getRealm() || idV != serverInfo.getID()) {
+        throw std::invalid_argument("Realm or ID does not match server information");
+    }
 
-    //// Kiểm tra xem realmV và idV có khớp với thông tin của serverV không
-    //if (realmV != serverInfo.getRealm() || idV != serverInfo.getID()) {
-    //    throw std::invalid_argument("Realm or ID does not match server information");
-    //}
+    // Phân tích các chuỗi thời gian từ decryptedParts
+    std::chrono::system_clock::time_point from = parseTimestamp(decryptedParts[1]);   // Thời gian bắt đầu hợp lệ
+    std::chrono::system_clock::time_point till = parseTimestamp(decryptedParts[2]);   // Thời gian hết hạn
+    std::chrono::system_clock::time_point rtime = parseTimestamp(decryptedParts[3]);  // Thời gian kiểm tra
 
-    //// Phân tích các chuỗi thời gian từ decryptedParts
-    //std::chrono::system_clock::time_point from = parseTimestamp(decryptedParts[1]);   // Thời gian bắt đầu hợp lệ
-    //std::chrono::system_clock::time_point till = parseTimestamp(decryptedParts[2]);   // Thời gian hết hạn
-    //std::chrono::system_clock::time_point rtime = parseTimestamp(decryptedParts[3]);  // Thời gian kiểm tra
+    // Lấy thời gian hiện tại
+    auto now = std::chrono::system_clock::now();
 
-    //// Lấy thời gian hiện tại
-    //auto now = std::chrono::system_clock::now();
-
-    //// Kiểm tra xem vé có còn hợp lệ không
-    //if (now < from) {
-    //    throw std::invalid_argument("Ticket is not yet valid");
-    //}
-    //if (now > till) {
-    //    throw std::invalid_argument("Ticket has expired");
-    //}
+    // Kiểm tra xem vé có còn hợp lệ không
+    if (now < from) {
+        throw std::invalid_argument("Ticket is not yet valid");
+    }
+    if (now > till) {
+        throw std::invalid_argument("Ticket has expired");
+    }
 
 
-    //// Tạo đối tượng AuthenticatorC bằng cách gọi hàm riêng
-    //std::string authenticator = createAuthenticator(clientInfo, decryptedParts[0]);
-    //vector<unsigned char> authenticator_vec = padString(authenticator);
+    // Tạo đối tượng AuthenticatorC bằng cách gọi hàm riêng
+    std::string authenticator = createAuthenticator(clientInfo, kcv);
+    vector<unsigned char> authenticator_vec = padString(authenticator);
 
-    //vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
+    if (kcv.size() > BLOCK_SIZE) {
+        kcv = kcv.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> kcv_vec(kcv.begin(), kcv.end());
+    while (kcv_vec.size() < BLOCK_SIZE) kcv_vec.push_back(0x00); // Bổ sung nếu thiếu
 
-    //std::string authenticator_en = unpadString(authenticator_en_vec);
+    std::string iv_t = iv;
+    if (iv_t.size() > BLOCK_SIZE) {
+        iv_t = iv_t.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> iv_vec(iv_t.begin(), iv_t.end());
+
+    vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
+
+    std::string authenticator_en = bytesToHex(authenticator_en_vec);
+
+    cout << "authenticator_en_vec (hex): ";
+    for (unsigned char c : authenticator_en_vec) {
+        printf("%02X", c);
+    }
+    cout << endl;
+    cout << "authenticator_en: " << authenticator_en << endl;
+    cout << endl;
 
     //// Tạo message gửi đi
     //std::string message = OPTION + "|" + ticketV + "|" + authenticator_en;
