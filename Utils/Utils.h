@@ -164,16 +164,8 @@ std::chrono::system_clock::time_point parseTimestamp(const std::string& timestam
 std::string trim(const std::string& s);
 
 //Step 6: Service Server reply to Client:
-string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const info& client, const string& iv, const string& priKeyV);
 // Hàm tách chuỗi bằng dấu '|' và gán vào các biến
 void splitAndAssign(const std::string& input, std::string& a, std::string& b, std::string& c);
-// Hàm tạo tin nhắn của Service server gửi cho Client
-std::string createServerServiceMessage(const ServiceServerData& service, const std::string subKey);
-//Hàm mã hóa tin để gửi đi
-string encryptServerServiceData(const ServiceServerData& service, const string subKey, string iv_str, string sessionKey);
-//Hàm chính của step 6:
-string processServiceResponse(const ServiceServerData& service, const string& decryptMessage, const info& client, const string& ivTicket,
-    const string& ivAuth, const string& priKeyV, string iv);
 
 //hàm tạo thông tin Service Ticket để test:
 uint64_t getCurrentTimestamp();
@@ -197,17 +189,8 @@ struct Ticket {
     std::string times_rtime;
 };
 
-//Hàm lưu thông tin Ticket sau khi giải mã:
-Ticket parseTicket(const string& decryptedText);
-//Hàm in ServiceTicket:
-void printTicket(const Ticket& ticket);
 
-std::string buildTicketPlaintext(const std::string& flag,
-    const std::string& sessionKey,
-    const std::string& realmc,
-    const std::string& clientID,
-    const std::string& clientAD,
-    uint64_t from, uint64_t till, uint64_t rtime);
+
 
 std::string generate_nonce(int length);
 
