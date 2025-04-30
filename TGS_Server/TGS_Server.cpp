@@ -1,8 +1,4 @@
-﻿#include <winsock2.h>
-#include <iostream>
-#pragma comment(lib, "Ws2_32.lib")
-
-using namespace std;
+﻿#include "../Utils/Utils.h"
 
 int main() {
     WSADATA wsaData;

@@ -136,6 +136,11 @@
   <ItemGroup>
     <ClCompile Include="Server_Service.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.vcxproj">
+      <Project>{1ef70839-6744-4ea7-8c78-3b0120d1a573}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
