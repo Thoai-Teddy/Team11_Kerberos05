@@ -347,7 +347,7 @@ int main() {
     memset(buffer, 0, sizeof(buffer)); // Clear buffer
     bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
     if (bytesReceived > 0) {
-        cout << "Received Service Ticket: " << buffer << endl;
+        cout << "Received Service Ticket: " << buffer << endl << endl;
     }
 
     // Tách dữ liệu mà server trả về
@@ -377,7 +377,7 @@ int main() {
 
     while (Key_c_tgs.size() < BLOCK_SIZE) Key_c_tgs.push_back(0x00); // Bổ sung nếu thiếu
 
-    // Tạo iv để mã hóa plaintext
+    // Tạo iv để giải mã plaintext
     string iv_pre_v = "ImAloneAndAboutY";
     if (iv_pre_v.size() > BLOCK_SIZE) {
         iv_pre_v = iv_pre_v.substr(0, BLOCK_SIZE);

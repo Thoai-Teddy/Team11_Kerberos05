@@ -132,8 +132,7 @@ int main() {
     cout << "TGS Ticket (encrypted by K_c): " << TGS_ticket_encrypted_str << endl << endl;
 
     vector<unsigned char> plaintext_block_from_as = aes_cbc_decrypt( TGS_ticket_encrypted, key_tgs, iv_tgs_ticket);
-    //cout << "Ticket TGS vector size: " << ticket_tgs_from_client_vector.size() << " bytes" << endl;
-    //cout << "Decrypted block size (before unpad): " << plaintext_block_from_as.size() << " bytes" << endl;
+
 
     string plaintext_from_as = unpadString(plaintext_block_from_as);
     cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_as << endl << endl;
