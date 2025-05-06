@@ -1,11 +1,6 @@
-﻿#include <winsock2.h>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <vector>
-#include <cstring>
-#include <cstdint>
-#pragma comment(lib, "Ws2_32.lib")
+﻿#include "../Utils/Utils.h"
+
+const int BLOCK_SIZE = 16;
 
 using namespace std;
 
