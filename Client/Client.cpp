@@ -13,7 +13,7 @@ void handleCtrlC(int sig) {
     WSACleanup();
     exit(0);
 }
-/*
+
 void sendToServer(SOCKET clientSocket, const std::string& message) {
     // Gửi dữ liệu tới server
     int messageLength = static_cast<int>(message.size());
@@ -30,7 +30,7 @@ void sendToServer(SOCKET clientSocket, const std::string& message) {
         std::cout << "Message sent to server: " << message << std::endl;
     }
 }
-*/
+
 
 std::string createAuthenticator(const info& clientInfo, const std::string& subkey) {
     
@@ -130,6 +130,52 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
     //sendToServer(clientSocket, message);
 }
 */
+
+void processTGSResponse(
+    const std::string& ticketV,
+    const std::string& kcv,
+    const std::string& from_time,
+    const std::string& till_time,
+    const std::string& realmV,
+    const std::string& idV,
+    const info& clientInfo,
+    const info& serverInfo,
+    const std::string& iv
+) {
+    // Kiểm tra thông tin Server V
+    if (realmV != serverInfo.getRealm() || idV != serverInfo.getID()) {
+        throw std::invalid_argument("Realm or ID does not match server information");
+    }
+
+    //std::string now = get_current_time_formatted();
+
+    //if (now < from_time) {
+    //    throw std::invalid_argument("Ticket is not yet valid");
+    //}
+    //if (now > till_time) {
+    //    throw std::invalid_argument("Ticket has expired");
+    //}
+
+    // Tạo AuthenticatorC: E(Kcv, [IDC || RealmC || TS2 || Subkey || Seq#])
+    std::string authenticator = createAuthenticator(clientInfo, kcv);
+    std::vector<unsigned char> authenticator_vec = padString(authenticator);
+
+    // Chuẩn bị key và IV
+    std::vector<unsigned char> kcv_vec(kcv.begin(), kcv.end());
+    while (kcv_vec.size() < BLOCK_SIZE) kcv_vec.push_back(0x00);
+    std::vector<unsigned char> iv_vec(iv.begin(), iv.end());
+
+    std::vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
+    std::string authenticator_en = bytesToHex(authenticator_en_vec);
+    std::cout << "authenticator: " << authenticator << endl;
+    // Tạo message gửi tới Server V
+    std::string message = OPTION + "|" + ticketV + "|" + authenticator_en;
+
+    // Gửi nếu cần
+    sendToServer(clientSocket, message);
+}
+
+
 
 std::string timePointToString(const std::chrono::system_clock::time_point& tp) {
     std::time_t time = std::chrono::system_clock::to_time_t(tp);
@@ -409,7 +455,10 @@ int main() {
     // Đóng kết nối với TGS Server
     closesocket(clientSocket);
 
-    /*
+    if (realm_v_from_tgs != serverV.getRealm() || id_v_from_tgs != serverV.getID()) {
+        throw std::invalid_argument("Realm or ID does not match server information");
+    }
+
     // Kết nối tới Service Server
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     serverAddr.sin_port = htons(8802); // Kết nối tới cổng 8802 của Service Server
@@ -420,20 +469,23 @@ int main() {
         WSACleanup();
         return 1;
     }
+    string iv_str(iv_v.begin(), iv_v.end());
 
-    // Gửi Service Ticket tới Service Server
-    send(clientSocket, buffer, strlen(buffer), 0);
+    processTGSResponse(ticket_v_from_tgs, K_c_v, from_time_from_tgs, till_time_from_tgs, realm_v_from_tgs, id_v_from_tgs, client, serverV, iv_str);
 
-    // Nhận dữ liệu từ Service Server
-    memset(buffer, 0, sizeof(buffer)); // Clear buffer
-    bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-    if (bytesReceived > 0) {
-        cout << "Received Service Data: " << buffer << endl;
-    }
-    */
+    //// Gửi Service Ticket tới Service Server
+    //send(clientSocket, buffer, strlen(buffer), 0);
+
+    //// Nhận dữ liệu từ Service Server
+    //memset(buffer, 0, sizeof(buffer)); // Clear buffer
+    //bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    //if (bytesReceived > 0) {
+    //    cout << "Received Service Data: " << buffer << endl;
+    //}
+
 
     // Đóng kết nối với Service Server
-    //closesocket(clientSocket);
+    closesocket(clientSocket);
     WSACleanup();
 
     return 0;
