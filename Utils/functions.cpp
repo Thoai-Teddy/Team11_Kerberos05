@@ -818,6 +818,19 @@ std::string receive_message(SOCKET sock) {
     return std::string(buffer, bytesReceived);
 }
 
+<<<<<<< HEAD
+
+
+/*
+int main() {
+   std::string clientID1 = "client123";
+   std::string encryptedData = "encryptedData";
+   std::chrono::system_clock::time_point TS2 = std::chrono::system_clock::now();
+   std::string subkey = "subkey123";
+   uint32_t seqNum = 1001;
+   std::string kcV = "kcV123";
+=======
+>>>>>>> a1bf0508ad8734dbfba3f7ce9199580c8f59e1aa
 
 //int main() {
 //   std::string clientID1 = "client123";
@@ -937,6 +950,110 @@ std::string receive_message(SOCKET sock) {
 //}
 
 
+<<<<<<< HEAD
+    std::string flag = "01";                // Flag
+    std::string sessionKey = "sessionKey123"; // Kc,v
+    std::string realmc = "realmA";            // Realmc
+    std::string clientID = "client123";       // IDC
+    std::string clientAD = "127.0.0.1";       // ADC
+
+    string iv_str = "1234567890abcdef";
+    string encryptMess = encryptServerServiceData(service, subkey, iv_str, sessionKey);
+    cout << "encrypt Mess: " << encryptMess << endl << endl;
+
+     Lấy thời gian hiện tại
+    uint64_t currentTime = getCurrentTimestamp();
+
+     Giả sử:
+     - `from` là thời gian hiện tại
+     - `till` là 1 giờ sau
+     - `rtime` là 2 giờ sau
+    uint64_t from = currentTime;
+    uint64_t till = currentTime + 3600000;  // 1 giờ sau
+    uint64_t rtime = currentTime + 7200000; // 2 giờ sau
+
+    /* Tạo plaintext từ các tham số trên*/
+    /*std::string plaintext = buildServiceTicketPlaintext(flag, sessionKey, realmc, clientID, clientAD, from, till, rtime);
+
+    In plaintext ra màn hình
+    std::cout << "Generated Plaintext: " << plaintext << std::endl;
+
+
+    string key_input = "privateKey1231111";
+
+    if (key_input.size() > BLOCK_SIZE) {
+        key_input = key_input.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> key(key_input.begin(), key_input.end());
+    while (key.size() < BLOCK_SIZE) key.push_back(0x00); // Bổ sung nếu thiếu
+
+    string iv_pre = "1234567890abcdef";
+    if (iv_pre.size() > BLOCK_SIZE) {
+        iv_pre = iv_pre.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> iv(iv_pre.begin(), iv_pre.end());
+    while (iv.size() < BLOCK_SIZE) iv.push_back(0x00); // Bổ sung nếu thiếu
+
+    /*Padding plaintext
+    vector<unsigned char> padded_plaintext = padString(plaintext);
+
+     /*Mã hóa
+    vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, key, iv);
+    string cipher = bytesToHex(ciphertext);
+
+    cout << "cipher after string:" << cipher << endl;
+
+     /*In ciphertext dạng hex
+    cout << "Ciphertext (hex): ";
+    for (unsigned char c : ciphertext) {
+        printf("%02X", c);
+    }
+    cout << endl;
+
+    string k = unpadString2(key);
+    string i = unpadString2(iv);
+    cout << "key string: " << k << endl << "iv string: " << i << endl;
+
+    key = padString(k);
+    iv = padString(i);
+
+     /*Giải mã
+    vector<unsigned char> decrypted_padded_plaintext = aes_cbc_decrypt(ciphertext, key, iv);
+
+     /*Gỡ padding
+    string decrypted_plaintext = unpadString(decrypted_padded_plaintext);
+
+    /* In plaintext sau giải mã
+    cout << "Plaintext sau khi giai ma: " << decrypted_plaintext << endl;
+
+    info client("client123", "127.0.0.1", "realmA", "sessionKey123111", "privateKey123");
+
+    /* Kiểm tra hàm
+    try {
+        string subkey = authenAuthenticatorAndGetSubkey(cipher, client, iv_pre, key_input);
+        cout << "Subkey: " << subkey << endl;
+
+        /*string sessionKey = authenTicketAndTakeSessionKey(cipher, client, iv_pre, key_input);
+        cout << "Session Key: " << sessionKey << endl;*/
+
+       /* cout << endl << "start decrypt test:" << endl;
+
+        vector<unsigned char> cipherBytes = hexStringToVector(cipher);
+        vector<unsigned char> key_vec(k.begin(), k.end());
+        vector<unsigned char> ivBytes(i.begin(), i.end());
+        vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key_vec, ivBytes);
+        string deText = unpadString(decryptedBytes);
+        cout << "result: " << deText << endl;
+    }
+    catch (const exception& e) {
+        cout << "Error: " << e.what() << endl;
+    }
+
+    return 0;
+}
+*/
+=======
+>>>>>>> a1bf0508ad8734dbfba3f7ce9199580c8f59e1aa
 
 ////Test tạo Message của Service Server
     //// Tạo một đối tượng ServiceServerData với thông tin giả lập

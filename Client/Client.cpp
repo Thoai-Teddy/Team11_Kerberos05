@@ -33,6 +33,7 @@ void sendToServer(SOCKET clientSocket, const std::string& message) {
 */
 
 std::string createAuthenticator(const info& clientInfo, const std::string& subkey) {
+    
     // Tạo đối tượng AuthenticatorC
     AuthenticatorC authenticator;
     authenticator.clientID = clientInfo.getID();  // ID của Client
@@ -51,7 +52,7 @@ std::string createAuthenticator(const info& clientInfo, const std::string& subke
         authenticator.subkey + "|" +
         std::to_string(authenticator.seqNum);
 }
-
+/*
 void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, const info& serverInfo, const std::string& kcTgs, const std::string& iv) {
     // Tách chuỗi nhận được thành các thành phần
     std::vector<std::string> parts = splitString(tgsResponse, "|");
@@ -128,6 +129,7 @@ void processTGSResponse(const std::string& tgsResponse, const info& clientInfo, 
 
     //sendToServer(clientSocket, message);
 }
+*/
 
 std::string timePointToString(const std::chrono::system_clock::time_point& tp) {
     std::time_t time = std::chrono::system_clock::to_time_t(tp);
@@ -144,6 +146,7 @@ std::string timePointToString(const std::chrono::system_clock::time_point& tp) {
 
     return oss.str();
 }
+
 
 int main() {
     
@@ -235,6 +238,8 @@ int main() {
     vector<unsigned char> iv(iv_pre.begin(), iv_pre.end());
     while (iv.size() < BLOCK_SIZE) iv.push_back(0x00); // Bổ sung nếu thiếu
 
+
+
     // Giải mã
     vector<unsigned char> plaintext_block_from_as = aes_cbc_decrypt(ciphertext_block_from_as, key_client, iv);
     string plaintext_from_as = unpadString(plaintext_block_from_as);
@@ -249,6 +254,8 @@ int main() {
     std::string nonce1_from_as = parts_plaintext_from_as[4];
     std::string realm_tgs_from_as = parts_plaintext_from_as[5];
     std::string id_tgs_from_as = parts_plaintext_from_as[6];
+
+
 
     if (nonce1_from_as != Nonce1) {
         cout << "WARNING! DIFFERENT NONCE! THIS MAY BE A REPLAY ATTACK!" << endl << endl;
@@ -305,8 +312,11 @@ int main() {
 
     */
 
-    /*
+    
     // Kết nối tới TGS Server
+    //Cấu hình
+    info serverV("IDServerV", "RealmServerV");
+    
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     serverAddr.sin_port = htons(8801); // Kết nối tới cổng 8801 của TGS Server
 
@@ -316,9 +326,20 @@ int main() {
         WSACleanup();
         return 1;
     }
+    // Gửi thông tin tới TGS Server theo dạng "Options|ID_V|Times|Nonce2|Ticket_TGS|Authenticatorc"
+    //std::string Options = "auth";
+	string Ticket_TGS = ticket_tgs_from_as;
+    Times = build_times(8, 24);
+    std::string Nonce2 = generate_nonce(8); // Random 8 bytes
+    auto TS2 = std::chrono::system_clock::now();  // Giả sử TS2 là time_point hiện tại
+    std::string TS2_str = timePointToString(TS2);  // Chuyển TS2 thành chuỗi
+	std::string subkey = createSubkey(K_c_tgs, TS2_str);
+    string Authenticatorc = createAuthenticator(client, subkey);
+    string message_to_tgs = Options + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "|" + Authenticatorc;
+	cout << "Sending message to TGS: " << message_to_tgs << endl << endl;
 
-    // Gửi TGT tới TGS Server
-    send_message(clientSocket, Ticket_TGS);
+    
+    send_message(clientSocket, message_to_tgs);
 
     int bytesReceived = 0;
 
@@ -326,12 +347,69 @@ int main() {
     memset(buffer, 0, sizeof(buffer)); // Clear buffer
     bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
     if (bytesReceived > 0) {
-        cout << "Received Service Ticket: " << buffer << endl;
+        cout << "Received Service Ticket: " << buffer << endl << endl;
+    }
+
+    // Tách dữ liệu mà server trả về
+    vector <std::string> response_tgs_part = splitString(buffer, "|");
+
+    if (response_tgs_part.size() < 4)
+    {
+        cout << "Error: Response from AS Server is invalid!" << endl << endl;
+        closesocket(clientSocket);
+        WSACleanup();
+        return -1;
+    }
+
+    std::string realm_c_from_tgs = response_tgs_part[0];
+    std::string id_c_from_tgs = response_tgs_part[1];
+    std::string ticket_v_from_tgs = response_tgs_part[2];
+    std::string ciphertext_hex_from_tgs = response_tgs_part[3];
+
+    std::vector<unsigned char> ciphertext_block_from_tgs = hexStringToVector(ciphertext_hex_from_tgs);
+
+
+    // Giải mã
+    if (K_c_tgs.size() > BLOCK_SIZE) {
+        K_c_tgs = K_c_tgs.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> Key_c_tgs(K_c_tgs.begin(), K_c_tgs.end());
+
+    while (Key_c_tgs.size() < BLOCK_SIZE) Key_c_tgs.push_back(0x00); // Bổ sung nếu thiếu
+
+    // Tạo iv để giải mã plaintext
+    string iv_pre_v = "ImAloneAndAboutY";
+    if (iv_pre_v.size() > BLOCK_SIZE) {
+        iv_pre_v = iv_pre_v.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> iv_v(iv_pre_v.begin(), iv_pre_v.end());
+
+    while (iv_v.size() < BLOCK_SIZE) iv_v.push_back(0x00); // Bổ sung nếu thiếu
+
+    vector<unsigned char> plaintext_block_from_tgs = aes_cbc_decrypt(ciphertext_block_from_tgs, Key_c_tgs, iv_v);
+    string plaintext_from_tgs = unpadString(plaintext_block_from_tgs);
+    cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_tgs << endl << endl;
+
+    vector <std::string> parts_plaintext_from_tgs = splitString(plaintext_from_tgs, "|");
+
+    std::string K_c_v = parts_plaintext_from_tgs[0];
+    std::string from_time_from_tgs = parts_plaintext_from_tgs[1];
+    std::string till_time_from_tgs = parts_plaintext_from_tgs[2];
+    std::string rtime_time_from_tgs = parts_plaintext_from_tgs[3];
+    std::string nonce2_from_tgs = parts_plaintext_from_tgs[4];
+    std::string realm_v_from_tgs = parts_plaintext_from_tgs[5];
+    std::string id_v_from_tgs = parts_plaintext_from_tgs[6];
+
+
+
+    if (nonce2_from_tgs != Nonce2) {
+        cout << "WARNING! DIFFERENT NONCE! THIS MAY BE A REPLAY ATTACK!" << endl << endl;
     }
 
     // Đóng kết nối với TGS Server
     closesocket(clientSocket);
 
+    /*
     // Kết nối tới Service Server
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     serverAddr.sin_port = htons(8802); // Kết nối tới cổng 8802 của Service Server
