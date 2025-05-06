@@ -25,6 +25,7 @@ int main() {
 
     info server("IDServerAS", "RealmServerAS");
 
+
     // Nhận request từ client
     std::string client_request = receive_message(clientSocket);
     cout << "Client request: " << client_request << endl << endl;
@@ -101,13 +102,15 @@ int main() {
     TGS_ticket.sessionKey = K_c_tgs;
     TGS_ticket.realmc = client.getRealm();
     TGS_ticket.clientID = client.getID();
-    TGS_ticket.clientAD = client.getAD();
+    TGS_ticket.clientAD = "192.168.2.5";
+    //TGS_ticket.clientAD = client.getAD();
+
     TGS_ticket.times_from = times_from_from_client;
     TGS_ticket.times_till = times_till_from_client;
     TGS_ticket.times_rtime = times_rtime_from_client;
 
-    std::string TGS_ticket_plaintext = TGS_ticket.flags + "|" + TGS_ticket.sessionKey + "|" + TGS_ticket.realmc + "|" + TGS_ticket.clientID + "|" 
-        + TGS_ticket.clientAD = client.getAD() + "|" + TGS_ticket.times_from + "|" + TGS_ticket.times_till + "|" + TGS_ticket.times_rtime;
+	std::string TGS_ticket_plaintext = TGS_ticket.flags + "|" + TGS_ticket.sessionKey + "|" + TGS_ticket.realmc + "|" + TGS_ticket.clientID + "|"
+        + TGS_ticket.clientAD + "|" + TGS_ticket.times_from + "|" + TGS_ticket.times_till + "|" + TGS_ticket.times_rtime;
     
     
     std::string plaintext = K_c_tgs + "|" + times_from_from_client + "|" + times_till_from_client + "|" + times_rtime_from_client + "|" 
@@ -127,6 +130,14 @@ int main() {
     cout << "Ciphertext (encrypted by K_c): " << ciphertext_str << endl << endl;
 
     cout << "TGS Ticket (encrypted by K_c): " << TGS_ticket_encrypted_str << endl << endl;
+
+    vector<unsigned char> plaintext_block_from_as = aes_cbc_decrypt( TGS_ticket_encrypted, key_tgs, iv_tgs_ticket);
+    //cout << "Ticket TGS vector size: " << ticket_tgs_from_client_vector.size() << " bytes" << endl;
+    //cout << "Decrypted block size (before unpad): " << plaintext_block_from_as.size() << " bytes" << endl;
+
+    string plaintext_from_as = unpadString(plaintext_block_from_as);
+    cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_as << endl << endl;
+
 
     // Gửi dữ liệu về cho client
     string response = client.getRealm() + "|" + client.getID() + "|" + TGS_ticket_encrypted_str + "|" + ciphertext_str;

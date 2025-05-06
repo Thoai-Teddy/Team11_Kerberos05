@@ -955,6 +955,8 @@ std::string receive_message(SOCKET sock) {
     return std::string(buffer, bytesReceived);
 }
 
+
+
 /*
 int main() {
    std::string clientID1 = "client123";
@@ -982,21 +984,21 @@ int main() {
     string encryptMess = encryptServerServiceData(service, subkey, iv_str, sessionKey);
     cout << "encrypt Mess: " << encryptMess << endl << endl;
 
-     /*Lấy thời gian hiện tại*/
+     Lấy thời gian hiện tại
     uint64_t currentTime = getCurrentTimestamp();
 
-     /*Giả sử:
+     Giả sử:
      - `from` là thời gian hiện tại
      - `till` là 1 giờ sau
-     - `rtime` là 2 giờ sau*/
+     - `rtime` là 2 giờ sau
     uint64_t from = currentTime;
     uint64_t till = currentTime + 3600000;  // 1 giờ sau
     uint64_t rtime = currentTime + 7200000; // 2 giờ sau
 
     /* Tạo plaintext từ các tham số trên*/
-    /*std::string plaintext = buildServiceTicketPlaintext(flag, sessionKey, realmc, clientID, clientAD, from, till, rtime);*/
+    /*std::string plaintext = buildServiceTicketPlaintext(flag, sessionKey, realmc, clientID, clientAD, from, till, rtime);
 
-    /* In plaintext ra màn hình*/
+    In plaintext ra màn hình
     std::cout << "Generated Plaintext: " << plaintext << std::endl;
 
 
@@ -1015,16 +1017,16 @@ int main() {
     vector<unsigned char> iv(iv_pre.begin(), iv_pre.end());
     while (iv.size() < BLOCK_SIZE) iv.push_back(0x00); // Bổ sung nếu thiếu
 
-    /*Padding plaintext*/
+    /*Padding plaintext
     vector<unsigned char> padded_plaintext = padString(plaintext);
 
-     /*Mã hóa*/
+     /*Mã hóa
     vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, key, iv);
     string cipher = bytesToHex(ciphertext);
 
     cout << "cipher after string:" << cipher << endl;
 
-     /*In ciphertext dạng hex*/
+     /*In ciphertext dạng hex
     cout << "Ciphertext (hex): ";
     for (unsigned char c : ciphertext) {
         printf("%02X", c);
@@ -1038,18 +1040,18 @@ int main() {
     key = padString(k);
     iv = padString(i);
 
-     /*Giải mã*/
+     /*Giải mã
     vector<unsigned char> decrypted_padded_plaintext = aes_cbc_decrypt(ciphertext, key, iv);
 
-     /*Gỡ padding*/
+     /*Gỡ padding
     string decrypted_plaintext = unpadString(decrypted_padded_plaintext);
 
-    /* In plaintext sau giải mã*/
+    /* In plaintext sau giải mã
     cout << "Plaintext sau khi giai ma: " << decrypted_plaintext << endl;
 
     info client("client123", "127.0.0.1", "realmA", "sessionKey123111", "privateKey123");
 
-    /* Kiểm tra hàm*/
+    /* Kiểm tra hàm
     try {
         string subkey = authenAuthenticatorAndGetSubkey(cipher, client, iv_pre, key_input);
         cout << "Subkey: " << subkey << endl;
@@ -1064,7 +1066,7 @@ int main() {
         vector<unsigned char> ivBytes(i.begin(), i.end());
         vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key_vec, ivBytes);
         string deText = unpadString(decryptedBytes);
-        cout << "result: " << deText << endl;*/
+        cout << "result: " << deText << endl;
     }
     catch (const exception& e) {
         cout << "Error: " << e.what() << endl;
