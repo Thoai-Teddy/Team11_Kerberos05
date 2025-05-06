@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TGS_Server", "TGS_Server\TG
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Server_Service", "Server_Service\Server_Service.vcxproj", "{B9013328-379C-4629-BADE-C45F321E6EE7}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Utils", "Utils\Utils.vcxproj", "{1EF70839-6744-4EA7-8C78-3B0120D1A573}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,6 +53,14 @@ Global
 		{B9013328-379C-4629-BADE-C45F321E6EE7}.Release|x64.Build.0 = Release|x64
 		{B9013328-379C-4629-BADE-C45F321E6EE7}.Release|x86.ActiveCfg = Release|Win32
 		{B9013328-379C-4629-BADE-C45F321E6EE7}.Release|x86.Build.0 = Release|Win32
+		{1EF70839-6744-4EA7-8C78-3B0120D1A573}.Debug|x64.ActiveCfg = Debug|x64
+		{1EF70839-6744-4EA7-8C78-3B0120D1A573}.Debug|x64.Build.0 = Debug|x64
+		{1EF70839-6744-4EA7-8C78-3B0120D1A573}.Debug|x86.ActiveCfg = Debug|Win32
+		{1EF70839-6744-4EA7-8C78-3B0120D1A573}.Debug|x86.Build.0 = Debug|Win32
+		{1EF70839-6744-4EA7-8C78-3B0120D1A573}.Release|x64.ActiveCfg = Release|x64
+		{1EF70839-6744-4EA7-8C78-3B0120D1A573}.Release|x64.Build.0 = Release|x64
+		{1EF70839-6744-4EA7-8C78-3B0120D1A573}.Release|x86.ActiveCfg = Release|Win32
+		{1EF70839-6744-4EA7-8C78-3B0120D1A573}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
