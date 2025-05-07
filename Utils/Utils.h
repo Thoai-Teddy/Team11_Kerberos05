@@ -109,6 +109,9 @@ struct ServiceServerData {
     uint32_t seqNum;             // Sequence number để tránh tấn công phát lại
     std::string kcV;             // Khóa phiên giữa Client và Server V
 
+    // Constructor mặc định
+    ServiceServerData() : seqNum(0), TS2(std::chrono::system_clock::now()) {}
+
     // Constructor để khởi tạo dữ liệu mã hóa
     ServiceServerData(const std::string& client, const std::string& encData,
         std::chrono::system_clock::time_point ts, const std::string& subk,

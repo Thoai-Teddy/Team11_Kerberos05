@@ -174,7 +174,7 @@ int main() {
     //Mã hóa
 	ServiceTicket Ticket_V;
     Ticket_V.flags = options_from_client;
-	Ticket_V.sessionKey = K_v;
+	Ticket_V.sessionKey = K_c_v;
 	Ticket_V.realmc = TGS_ticket.realmc;
 	Ticket_V.clientID = TGS_ticket.clientID;
 	Ticket_V.clientAD = TGS_ticket.clientAD;
@@ -193,6 +193,7 @@ int main() {
 
 
     // Padding plaintext
+    cout << endl << "PLAINTEXT TICKET V:" << Ticket_V_plaintext << endl << endl;
     vector<unsigned char> padded_Ticket_V_plaintext = padString(Ticket_V_plaintext);
     vector<unsigned char> padded_plaintext = padString(plaintext);
 
@@ -219,7 +220,13 @@ int main() {
 
     cout << "Ticket V (encrypted by K_v): " << Ticket_V_encrypted_str << endl << endl;
 
+    vector<unsigned char> cipherBytes = hexStringToVector(Ticket_V_encrypted_str);
+    vector<unsigned char> key(K_v.begin(), K_v.end());
+    vector<unsigned char> ivBytes(iv_pre_v_ticket.begin(), iv_pre_v_ticket.end());
+    vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key, ivBytes);
+    string decryptedText = unpadString(decryptedBytes);
 
+    cout << "DECRYPT MESS: " << decryptedText << endl << endl;
 
     // Mã hóa plaintext
     std::string K_c_tgs = TGS_ticket.sessionKey;

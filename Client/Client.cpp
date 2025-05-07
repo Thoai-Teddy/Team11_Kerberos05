@@ -472,6 +472,16 @@ int main() {
     string iv_str(iv_v.begin(), iv_v.end());
 
     processTGSResponse(ticket_v_from_tgs, K_c_v, from_time_from_tgs, till_time_from_tgs, realm_v_from_tgs, id_v_from_tgs, client, serverV, iv_str);
+    
+    // Nhận dữ liệu phản hồi từ Service Server
+    memset(buffer, 0, sizeof(buffer)); // Clear buffer
+    bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    if (bytesReceived > 0) {
+        cout << "Receive from V: " << buffer << endl;
+    }
+    else {
+        cerr << "No response or error receiving from Service Server." << endl;
+    }
 
     //// Gửi Service Ticket tới Service Server
     //send(clientSocket, buffer, strlen(buffer), 0);

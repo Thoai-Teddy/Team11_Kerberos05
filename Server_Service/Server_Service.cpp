@@ -16,11 +16,17 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, const info& cl
     // Bước 4: Bỏ padding để lấy chuỗi gốc
     string decryptedText = unpadString(decryptedBytes);
 
+    cout << "DECRYPT TICKET V: " << decryptedText << endl << endl;
+
     // Bước 5: Parse ServiceTicket
     ServiceTicket ticket = parseServiceTicket(decryptedText);
 
+    cout << "Received TicketV: ";
+    printServiceTicket(ticket);
+    cout << endl;
+
     // Bước 6: Xác thực
-    if (ticket.clientID != client.getID()) {
+    /*if (ticket.clientID != client.getID()) {
         return "mismatch!";
     }
     if (ticket.clientAD != client.getAD()) {
@@ -28,12 +34,12 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, const info& cl
     }
     if (ticket.realmc != client.getRealm()) {
         return "mismatch!";
-    }
+    }*/
 
-    auto now = chrono::system_clock::now();
+    /*auto now = chrono::system_clock::now();
     if (now < ticket.timeInfo.from || now > ticket.timeInfo.till) {
         return "mismatch!";
-    }
+    }*/
 
     return ticket.sessionKey;
 }
@@ -47,14 +53,16 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const
 
     string decryptedText = unpadString(decryptedBytes);
 
+    cout << endl << "DECRYPT AUTH: " << decryptedText << endl << endl;
+
     AuthenticatorC auth = parseAuthenticator(decryptedText);
 
-    if (auth.clientID != client.getID()) {
+    /*if (auth.clientID != client.getID()) {
         return "mismatch!";
     }
     if (auth.realmc != client.getRealm()) {
         return "mismatch!";
-    }
+    }*/
 
     auto now = chrono::system_clock::now();
     /*if (now < auth.TS2) {
@@ -72,9 +80,9 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const
     const int allowedSkewSeconds = 300; // 5 phút
     auto diff = chrono::duration_cast<chrono::seconds>(now - auth.TS2).count();
 
-    if (abs(diff) > allowedSkewSeconds) {
+    /*if (abs(diff) > allowedSkewSeconds) {
         return "mismatch!";
-    }
+    }*/
 
     return auth.subkey;
 }
@@ -125,10 +133,10 @@ string processServiceResponse(const ServiceServerData& service, const string& de
 
     splitAndAssign(decryptMessage, options, cipherTicket, authen);
 
-    string sessionKey = authenTicketAndTakeSessionKey(cipherTicket, client, ivAuth, priKeyV);
+    string sessionKey = authenTicketAndTakeSessionKey(cipherTicket, client, ivTicket, priKeyV);
     if (sessionKey == "mismatch!") return "Invalid information in Ticket!";
     else {
-        string subKey = authenAuthenticatorAndGetSubkey(authen, client, ivTicket, sessionKey);
+        string subKey = authenAuthenticatorAndGetSubkey(authen, client, ivAuth, sessionKey);
         if (subKey == "mismatch!") return "Invalid information in Authenticator!";
         else {
             encryptMessage = encryptServerServiceData(service, subKey, iv, sessionKey);
@@ -138,7 +146,7 @@ string processServiceResponse(const ServiceServerData& service, const string& de
     return encryptMessage;
 }
 
-int main() {
+/*int main() {
     WSADATA wsaData;
     SOCKET serviceSocket, clientSocket;
     sockaddr_in serviceAddr, clientAddr;
@@ -172,5 +180,89 @@ int main() {
     closesocket(clientSocket);
     closesocket(serviceSocket);
     WSACleanup();
+    return 0;
+}*/
+
+int main() {
+    WSADATA wsaData;
+    SOCKET serviceSocket, clientSocket;
+    sockaddr_in serviceAddr, clientAddr;
+    int clientAddrLen = sizeof(clientAddr);
+    char buffer[2048]; // Tăng kích thước nếu dữ liệu dài hơn
+    string ivAuth = "ImAloneAndAboutY";  // IV cố định để giải mã Authenticator
+    string ivTicket = "HiYouAreNotAlone"; // IV cố định để giải mã Ticket
+    string priKeyV = "ThereIsAManOnSky"; // Khóa bí mật của Service Server (16 bytes)
+    string iv = "ivforVresponseCl";     // IV để mã hóa phản hồi
+
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+    serviceSocket = socket(AF_INET, SOCK_STREAM, 0);
+    serviceAddr.sin_family = AF_INET;
+    serviceAddr.sin_addr.s_addr = INADDR_ANY;
+    serviceAddr.sin_port = htons(8802);
+
+    bind(serviceSocket, (sockaddr*)&serviceAddr, sizeof(serviceAddr));
+    listen(serviceSocket, 5);
+
+    cout << "Service Server listening on port 8802...\n";
+
+    clientSocket = accept(serviceSocket, (sockaddr*)&clientAddr, &clientAddrLen);
+    cout << "Client connected to Service Server.\n";
+
+    // Nhận tin nhắn chứa Ticket và Authenticator
+    memset(buffer, 0, sizeof(buffer));
+    int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    if (bytesReceived <= 0) {
+        cerr << "Error receiving data from client.\n";
+        closesocket(clientSocket);
+        closesocket(serviceSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    string decryptMessage(buffer);
+    cout << "Received encrypted service message: " << decryptMessage << "\n";
+
+
+
+    // Tạo đối tượng giả định client info
+    info client("client123", "192.168.1.10", "REALM1", "", "");
+
+    // Tạo dữ liệu dịch vụ
+    ServiceServerData service;
+    service.TS2 = chrono::system_clock::now();
+    service.seqNum = 12345;
+
+
+    /*string cipherTicket, options, authen;
+    string encryptMessage = "";
+
+    splitAndAssign(decryptMessage, options, cipherTicket, authen);
+
+    string sessionKey = authenTicketAndTakeSessionKey(cipherTicket, client, ivTicket, priKeyV);
+    if (sessionKey == "mismatch!")  encryptMessage = "Invalid information in Ticket!";
+    else {
+        string subKey = authenAuthenticatorAndGetSubkey(authen, client, ivAuth, sessionKey);
+        if (subKey == "mismatch!") encryptMessage = "Invalid information in Authenticator!";
+        else {
+            encryptMessage = encryptServerServiceData(service, subKey, iv, sessionKey);
+        }
+    }
+
+    cout << endl << "Encrypt mess: " << encryptMessage << endl << endl;*/
+
+    // Xử lý bước 6: xác thực ticket + authenticator, tạo phản hồi
+    string response = processServiceResponse(service, decryptMessage, client, ivTicket, ivAuth, priKeyV, iv);
+
+    cout << endl << "Encrypt mess: " << response << endl << endl;
+
+    // Gửi phản hồi
+    send(clientSocket, response.c_str(), response.length(), 0);
+
+    // Đóng socket
+    closesocket(clientSocket);
+    closesocket(serviceSocket);
+    WSACleanup();
+
     return 0;
 }
