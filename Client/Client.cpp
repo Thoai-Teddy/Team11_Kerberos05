@@ -193,6 +193,18 @@ std::string timePointToString(const std::chrono::system_clock::time_point& tp) {
     return oss.str();
 }
 
+string decryptMessFromV(const string& encryptMess, const string& Kcv, const string& iv_str) {
+    vector<unsigned char> cipherBytes = hexStringToVector(encryptMess);
+    vector<unsigned char> key_vec(Kcv.begin(), Kcv.end());
+    vector<unsigned char> ivBytes(iv_str.begin(), iv_str.end());
+
+    vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key_vec, ivBytes);
+
+    string decryptedText = unpadString(decryptedBytes);
+
+    return decryptedText;
+}
+
 
 int main() {
     
@@ -474,24 +486,22 @@ int main() {
     processTGSResponse(ticket_v_from_tgs, K_c_v, from_time_from_tgs, till_time_from_tgs, realm_v_from_tgs, id_v_from_tgs, client, serverV, iv_str);
     
     // Nhận dữ liệu phản hồi từ Service Server
+    string iv_from_V = "ivforVresponseCl";
+
     memset(buffer, 0, sizeof(buffer)); // Clear buffer
     bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
     if (bytesReceived > 0) {
-        cout << "Receive from V: " << buffer << endl;
+        cout << endl << "Receive from V: " << buffer << endl;
+        
+        string s(buffer);
+        string decryptedText = decryptMessFromV(s, K_c_v, iv_from_V);
+
+        cout << endl << "Decrypt Mess from V: " << decryptedText << endl;
+        cout << endl << "Kerberos 5 authentication complete!" << endl << endl;
     }
     else {
         cerr << "No response or error receiving from Service Server." << endl;
     }
-
-    //// Gửi Service Ticket tới Service Server
-    //send(clientSocket, buffer, strlen(buffer), 0);
-
-    //// Nhận dữ liệu từ Service Server
-    //memset(buffer, 0, sizeof(buffer)); // Clear buffer
-    //bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-    //if (bytesReceived > 0) {
-    //    cout << "Received Service Data: " << buffer << endl;
-    //}
 
 
     // Đóng kết nối với Service Server

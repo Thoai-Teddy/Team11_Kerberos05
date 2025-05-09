@@ -21,10 +21,6 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, const info& cl
     // Bước 5: Parse ServiceTicket
     ServiceTicket ticket = parseServiceTicket(decryptedText);
 
-    cout << "Received TicketV: ";
-    printServiceTicket(ticket);
-    cout << endl;
-
     // Bước 6: Xác thực
     /*if (ticket.clientID != client.getID()) {
         return "mismatch!";
@@ -44,23 +40,25 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, const info& cl
     return ticket.sessionKey;
 }
 
-string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const info& client, const string& iv, const string& priKeyV) {
+string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, ServiceServerData& service, const info& client, const string& iv, const string& priKeyV) {
     vector<unsigned char> cipherBytes = hexStringToVector(encryptAuthenticator);
     vector<unsigned char> key_vec(priKeyV.begin(), priKeyV.end());
     vector<unsigned char> ivBytes(iv.begin(), iv.end());
+    bool sucess = true;
 
     vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key_vec, ivBytes);
 
     string decryptedText = unpadString(decryptedBytes);
 
-    cout << endl << "DECRYPT AUTH: " << decryptedText << endl << endl;
-
     AuthenticatorC auth = parseAuthenticator(decryptedText);
 
+
     /*if (auth.clientID != client.getID()) {
+        sucess = false;
         return "mismatch!";
     }
     if (auth.realmc != client.getRealm()) {
+        sucess = false;
         return "mismatch!";
     }*/
 
@@ -81,8 +79,14 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const
     auto diff = chrono::duration_cast<chrono::seconds>(now - auth.TS2).count();
 
     /*if (abs(diff) > allowedSkewSeconds) {
+        sucess = false;
         return "mismatch!";
     }*/
+
+    if (sucess) {
+        service.TS2 = auth.TS2;
+        service.seqNum = auth.seqNum;
+    }
 
     return auth.subkey;
 }
@@ -95,6 +99,8 @@ std::string createServerServiceMessage(const ServiceServerData& service, const s
     // Chuyển seqNum thành chuỗi
     std::ostringstream oss;
     oss << ts2Millisec << "|" << subKey << "|" << service.seqNum;
+
+    cout << endl << "Plaintext from V: " << oss.str() << endl;
 
     // Trả về chuỗi đã kết hợp
     return oss.str();
@@ -126,7 +132,7 @@ string encryptServerServiceData(const ServiceServerData& service, const string s
 }
 
 //Hàm chính của step 6
-string processServiceResponse(const ServiceServerData& service, const string& decryptMessage, const info& client, const string& ivTicket,
+string processServiceResponse(ServiceServerData& service, const string& decryptMessage, const info& client, const string& ivTicket,
     const string& ivAuth, const string& priKeyV, string iv) {
     string cipherTicket, options, authen;
     string encryptMessage = "";
@@ -136,7 +142,7 @@ string processServiceResponse(const ServiceServerData& service, const string& de
     string sessionKey = authenTicketAndTakeSessionKey(cipherTicket, client, ivTicket, priKeyV);
     if (sessionKey == "mismatch!") return "Invalid information in Ticket!";
     else {
-        string subKey = authenAuthenticatorAndGetSubkey(authen, client, ivAuth, sessionKey);
+        string subKey = authenAuthenticatorAndGetSubkey(authen, service, client, ivAuth, sessionKey);
         if (subKey == "mismatch!") return "Invalid information in Authenticator!";
         else {
             encryptMessage = encryptServerServiceData(service, subKey, iv, sessionKey);
@@ -145,43 +151,6 @@ string processServiceResponse(const ServiceServerData& service, const string& de
 
     return encryptMessage;
 }
-
-/*int main() {
-    WSADATA wsaData;
-    SOCKET serviceSocket, clientSocket;
-    sockaddr_in serviceAddr, clientAddr;
-    int clientAddrLen = sizeof(clientAddr);
-    char buffer[1024];
-
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
-
-    serviceSocket = socket(AF_INET, SOCK_STREAM, 0);
-    serviceAddr.sin_family = AF_INET;
-    serviceAddr.sin_addr.s_addr = INADDR_ANY;
-    serviceAddr.sin_port = htons(8802);
-
-    bind(serviceSocket, (sockaddr*)&serviceAddr, sizeof(serviceAddr));
-    listen(serviceSocket, 5);
-
-    cout << "Service Server listening on port 8802...\n";
-
-    clientSocket = accept(serviceSocket, (sockaddr*)&clientAddr, &clientAddrLen);
-    cout << "Client connected to Service Server.\n";
-
-    // Nhận Service Ticket
-    memset(buffer, 0, sizeof(buffer));
-    recv(clientSocket, buffer, sizeof(buffer), 0);
-    cout << "Received Service Ticket: " << buffer << "\n";
-
-    // Gửi dịch vụ thực tế
-    string serviceData = "Welcome! Here is your service data.";
-    send(clientSocket, serviceData.c_str(), serviceData.length(), 0);
-
-    closesocket(clientSocket);
-    closesocket(serviceSocket);
-    WSACleanup();
-    return 0;
-}*/
 
 int main() {
     WSADATA wsaData;
@@ -230,28 +199,8 @@ int main() {
 
     // Tạo dữ liệu dịch vụ
     ServiceServerData service;
-    service.TS2 = chrono::system_clock::now();
-    service.seqNum = 12345;
 
-
-    /*string cipherTicket, options, authen;
-    string encryptMessage = "";
-
-    splitAndAssign(decryptMessage, options, cipherTicket, authen);
-
-    string sessionKey = authenTicketAndTakeSessionKey(cipherTicket, client, ivTicket, priKeyV);
-    if (sessionKey == "mismatch!")  encryptMessage = "Invalid information in Ticket!";
-    else {
-        string subKey = authenAuthenticatorAndGetSubkey(authen, client, ivAuth, sessionKey);
-        if (subKey == "mismatch!") encryptMessage = "Invalid information in Authenticator!";
-        else {
-            encryptMessage = encryptServerServiceData(service, subKey, iv, sessionKey);
-        }
-    }
-
-    cout << endl << "Encrypt mess: " << encryptMessage << endl << endl;*/
-
-    // Xử lý bước 6: xác thực ticket + authenticator, tạo phản hồi
+    // Xử lý xác thực ticket + authenticator, tạo phản hồi
     string response = processServiceResponse(service, decryptMessage, client, ivTicket, ivAuth, priKeyV, iv);
 
     cout << endl << "Encrypt mess: " << response << endl << endl;

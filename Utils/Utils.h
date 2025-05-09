@@ -74,6 +74,7 @@ struct AuthenticatorC {
     std::string subkey;    // Subkey bảo vệ phiên giao dịch
     uint32_t seqNum;       // Sequence number để tránh tấn công phát lại
 };
+
 //hàm lưu giá trị vào AuthenticatorC sau khi giải mã:
 AuthenticatorC parseAuthenticator(const string& decryptedText);
 
@@ -180,6 +181,8 @@ std::string buildServiceTicketPlaintext(const std::string& flag,
     uint64_t from, uint64_t till, uint64_t rtime);
 
 
+
+
 // Cấu trúc  Ticket
 struct Ticket {
     std::string clientID;        // Thông tin định danh Client
@@ -204,3 +207,4 @@ std::string build_times(int ticket_lifetime, int renew_lifetime);
 void send_message(SOCKET sock, const std::string& message);
 
 std::string receive_message(SOCKET sock);
+
