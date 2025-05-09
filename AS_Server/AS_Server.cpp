@@ -70,7 +70,8 @@ int main() {
     while (key_tgs.size() < BLOCK_SIZE) key_tgs.push_back(0x00);
 
     // Tạo iv để mã hóa TGS ticket
-    string iv_pre_tgs_ticket = "WelcomeToOurHome";
+    //string iv_pre_tgs_ticket = "WelcomeToOurHome";
+    string iv_pre_tgs_ticket = generateRandomString();
     if (iv_pre_tgs_ticket.size() > BLOCK_SIZE) {
         iv_pre_tgs_ticket = iv_pre_tgs_ticket.substr(0, BLOCK_SIZE);
     }
@@ -89,7 +90,8 @@ int main() {
     while (key_client.size() < BLOCK_SIZE) key_client.push_back(0x00); // Bổ sung nếu thiếu
 
     // Tạo iv để mã hóa với K_c
-    string iv_pre = "ThisIsMyIVForEnc";
+    //string iv_pre = "ThisIsMyIVForEnc";
+    string iv_pre = generateRandomString();
     if (iv_pre.size() > BLOCK_SIZE) {
         iv_pre = iv_pre.substr(0, BLOCK_SIZE);
     }
@@ -139,7 +141,7 @@ int main() {
 
 
     // Gửi dữ liệu về cho client
-    string response = client.getRealm() + "|" + client.getID() + "|" + TGS_ticket_encrypted_str + "|" + ciphertext_str;
+    string response = client.getRealm() + "|" + client.getID() + "|" + TGS_ticket_encrypted_str + "||" + iv_pre_tgs_ticket + "|" + ciphertext_str + "||" + iv_pre;
     cout << "Response from server: " << response << endl << endl;
     send_message(clientSocket, response);
 

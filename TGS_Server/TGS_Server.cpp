@@ -63,8 +63,27 @@ int main() {
 	memset(buffer, 0, sizeof(buffer));
 	recv(clientSocket, buffer, sizeof(buffer), 0);
 	cout << "Received data from Client: " << buffer << endl;
+
+    // Lấy iv để giải mã TGS ticket
+    string txt(buffer);
+    string iv_pre_tgs_ticket = "";
+    try {
+        iv_pre_tgs_ticket = extractAfterFirstDoublePipe(txt);
+    }
+    catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl << endl;
+    }
+
+    if (iv_pre_tgs_ticket.size() > BLOCK_SIZE) {
+        iv_pre_tgs_ticket = iv_pre_tgs_ticket.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> iv_tgs_ticket(iv_pre_tgs_ticket.begin(), iv_pre_tgs_ticket.end());
+
+    while (iv_tgs_ticket.size() < BLOCK_SIZE) iv_tgs_ticket.push_back(0x00); // Bổ sung nếu thiếu
+
+
 	// Tách dữ liệu từ Client
-	std::vector <std::string> client_request_vector = splitString(buffer, "|");
+	std::vector <std::string> client_request_vector = splitString(txt, "|");
     std::string options_from_client = client_request_vector[0];
     std::string id_v_from_client = client_request_vector[1];
     std::string times_from_from_client = client_request_vector[2];
@@ -77,6 +96,7 @@ int main() {
     for (size_t i = 7; i < client_request_vector.size(); ++i) {
         if (i > 7) authenticatorc_from_client += "|";  // thêm dấu phân cách
         authenticatorc_from_client += client_request_vector[i];
+        cout << endl << "Authen: " << authenticatorc_from_client << endl << endl;
     }
 
 
@@ -100,15 +120,6 @@ int main() {
     }
     vector<unsigned char> key_tgs(K_tgs.begin(), K_tgs.end());
     while (key_tgs.size() < BLOCK_SIZE) key_tgs.push_back(0x00); // Bổ sung nếu thiếu
-
-    // Tạo iv để giải mã TGS ticket (Mặc định bên AS)
-    string iv_pre_tgs_ticket = "WelcomeToOurHome";
-    if (iv_pre_tgs_ticket.size() > BLOCK_SIZE) {
-        iv_pre_tgs_ticket = iv_pre_tgs_ticket.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> iv_tgs_ticket(iv_pre_tgs_ticket.begin(), iv_pre_tgs_ticket.end());
-
-    while (iv_tgs_ticket.size() < BLOCK_SIZE) iv_tgs_ticket.push_back(0x00); // Bổ sung nếu thiếu
 
     vector<unsigned char> plaintext_block_from_as = aes_cbc_decrypt(ticket_tgs_from_client_vector, key_tgs, iv_tgs_ticket);
     //cout << "Ticket TGS vector size: " << ticket_tgs_from_client_vector.size() << " bytes" << endl;
@@ -141,7 +152,6 @@ int main() {
 
 
     //Kiểm tra
-
     if (TGS_ticket.clientID != authenticator_decrypt.clientID) {
         // Sai client → từ chối
         throw std::runtime_error("Client ID mismatch between TicketTGS and AuthenticatorC");
@@ -207,7 +217,9 @@ int main() {
     while (Key_v.size() < BLOCK_SIZE) Key_v.push_back(0x00); // Bổ sung nếu thiếu
 
     // Tạo iv để mã hóa Ticket V
-    string iv_pre_v_ticket = "HiYouAreNotAlone";
+    //string iv_pre_v_ticket = "HiYouAreNotAlone";
+    string iv_pre_v_ticket = "";
+    iv_pre_v_ticket = generateRandomString();
     if (iv_pre_v_ticket.size() > BLOCK_SIZE) {
         iv_pre_v_ticket = iv_pre_v_ticket.substr(0, BLOCK_SIZE);
     }
@@ -238,7 +250,8 @@ int main() {
     while (Key_c_tgs.size() < BLOCK_SIZE) Key_c_tgs.push_back(0x00); // Bổ sung nếu thiếu
 
     // Tạo iv để mã hóa plaintext
-    string iv_pre_v = "ImAloneAndAboutY";
+    //string iv_pre_v = "ImAloneAndAboutY";
+    string iv_pre_v = generateRandomString();
     if (iv_pre_v.size() > BLOCK_SIZE) {
         iv_pre_v = iv_pre_v.substr(0, BLOCK_SIZE);
     }
@@ -253,7 +266,7 @@ int main() {
 
 
     // Gửi dữ liệu về cho client
-    string response = Ticket_V.realmc + "|" + Ticket_V.clientID + "|" + Ticket_V_encrypted_str + "|" + ciphertext_str;
+    string response = Ticket_V.realmc + "|" + Ticket_V.clientID + "|" + Ticket_V_encrypted_str + "||" + iv_pre_v_ticket + "|" + ciphertext_str + "||" + iv_pre_v;
     cout << "Response from server: " << response << endl << endl;
     send_message(clientSocket, response);
 

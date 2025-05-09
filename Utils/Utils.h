@@ -208,3 +208,9 @@ void send_message(SOCKET sock, const std::string& message);
 
 std::string receive_message(SOCKET sock);
 
+// Hàm tạo chuỗi 16 ký tự ngẫu nhiên (dùng để tạo key và iv)
+std::string generateRandomString(size_t length = 16);
+
+//hàm tách iv khỏi message:
+std::string extractAfterFirstDoublePipe(std::string& input);
+std::string extractAfterSecondDoublePipe(std::string& input);

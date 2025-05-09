@@ -819,5 +819,53 @@ std::string receive_message(SOCKET sock) {
 }
 
 
+// Hàm tạo chuỗi 16 ký tự ngẫu nhiên (dùng để tạo key và iv)
+std::string generateRandomString(size_t length) {
+    const std::string characters =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+
+    std::default_random_engine engine(static_cast<unsigned>(time(nullptr)));
+    std::uniform_int_distribution<size_t> dist(0, characters.size() - 1);
+
+    std::string result;
+    for (size_t i = 0; i < length; ++i) {
+        result += characters[dist(engine)];
+    }
+    return result;
+}
+
+
+std::string extractAfterFirstDoublePipe(std::string& input) {
+    size_t start = input.find("||");
+    if (start == std::string::npos)
+        throw std::invalid_argument("Cannot find '||' in input");
+
+    size_t contentStart = start + 2; // Bỏ qua "||"
+    size_t end = input.find("|", contentStart);
+    if (end == std::string::npos)
+        throw std::invalid_argument("Cannot find '|' after '||'");
+
+    std::string result = input.substr(contentStart, end - contentStart);
+
+    // Xóa chuỗi con + "||", KHÔNG xóa dấu '|'
+    input.erase(start, contentStart - start + result.size());
+
+    return result;
+}
+std::string extractAfterSecondDoublePipe(std::string& input) {
+    size_t last = input.rfind("||");
+    if (last == std::string::npos)
+        throw std::invalid_argument("Cannot find last '||'");
+
+    size_t start = last + 2;
+    std::string result = input.substr(start);
+
+    // Xóa phần "||" và chuỗi con phía sau nó
+    input.erase(last);
+
+    return result;
+}
 
 

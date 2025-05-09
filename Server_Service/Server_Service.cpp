@@ -145,7 +145,7 @@ string processServiceResponse(ServiceServerData& service, const string& decryptM
         string subKey = authenAuthenticatorAndGetSubkey(authen, service, client, ivAuth, sessionKey);
         if (subKey == "mismatch!") return "Invalid information in Authenticator!";
         else {
-            encryptMessage = encryptServerServiceData(service, subKey, iv, sessionKey);
+            encryptMessage = encryptServerServiceData(service, subKey, iv, sessionKey) + "||" + iv;
         }
     }
 
@@ -161,7 +161,7 @@ int main() {
     string ivAuth = "ImAloneAndAboutY";  // IV cố định để giải mã Authenticator
     string ivTicket = "HiYouAreNotAlone"; // IV cố định để giải mã Ticket
     string priKeyV = "ThereIsAManOnSky"; // Khóa bí mật của Service Server (16 bytes)
-    string iv = "ivforVresponseCl";     // IV để mã hóa phản hồi
+    string iv = generateRandomString();     // IV để mã hóa phản hồi
 
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 
