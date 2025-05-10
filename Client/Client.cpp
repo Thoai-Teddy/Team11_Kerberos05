@@ -52,87 +52,11 @@ string createAuthenticator(const info& clientInfo, const string& subkey) {
         authenticator.subkey + "|" +
         to_string(authenticator.seqNum);
 }
-/*
-void processTGSResponse(const string& tgsResponse, const info& clientInfo, const info& serverInfo, const string& kcTgs, const string& iv) {
-    // Tách chuỗi nhận được thành các thành phần
-    vector<string> parts = splitString(tgsResponse, "|");
 
-    if (parts.size() < 4) {
-        throw invalid_argument("Invalid TGS response format");
-    }
-
-    // Phân tích từng thành phần
-    string realmC = parts[0];
-    string idC = parts[1];
-    string ticketV = parts[2];
-    string encryptedData = parts[3];
-
-    vector<unsigned char> encryptedData_vec = hexStringToVector(encryptedData);
-    if (realmC != clientInfo.getRealm() || idC != clientInfo.getID()) {
-        throw runtime_error("Mismatch between TGS response and client information");
-    }
-
-    vector<unsigned char> kcTgs_vec(kcTgs.begin(), kcTgs.end());
-    vector<unsigned char> iv_vec(iv.begin(), iv.end());
-
-    // Giải mã E(Kc,tgs, [...])
-    vector<unsigned char> decryptedData_vec = aes_cbc_decrypt(encryptedData_vec, kcTgs_vec, iv_vec);
-
-    string decryptedData = unpadString(decryptedData_vec);
-
-    // Tách dữ liệu đã giải mã
-    vector<string> decryptedParts = splitString(decryptedData, "|");
-    if (decryptedParts.size() < 7) {
-        throw invalid_argument("Invalid decrypted data format");
-    }
-
-    string kcv = decryptedParts[0];
-    string realmV = decryptedParts[5];  // Realm của Server V
-    string idV = decryptedParts[6];     // ID của Server V
-
-    // Kiểm tra xem realmV và idV có khớp với thông tin của serverV không
-    if (realmV != serverInfo.getRealm() || idV != serverInfo.getID()) {
-        throw invalid_argument("Realm or ID does not match server information");
-    }
-
-    // Phân tích các chuỗi thời gian từ decryptedParts
-    chrono::system_clock::time_point from = chrono::system_clock::time_point(chrono::seconds(stoll(decryptedParts[1])));   // Thời gian bắt đầu hợp lệ
-    chrono::system_clock::time_point till = chrono::system_clock::time_point(chrono::seconds(stoll(decryptedParts[2])));   // Thời gian hết hạn
-    chrono::system_clock::time_point rtime = chrono::system_clock::time_point(chrono::seconds(stoll(decryptedParts[3])));  // Thời gian kiểm tra
-    
-    // Lấy thời gian hiện tại
-    auto now = chrono::system_clock::now();
-
-    // Kiểm tra xem vé có còn hợp lệ không
-    if (now < from) {
-        throw invalid_argument("Ticket is not yet valid");
-    }
-    if (now > till) {
-        throw invalid_argument("Ticket has expired");
-    }
-
-
-    // Tạo đối tượng AuthenticatorC bằng cách gọi hàm riêng
-    string authenticator = createAuthenticator(clientInfo, kcv);
-    vector<unsigned char> authenticator_vec = padString(authenticator);
-    if (kcv.size() > BLOCK_SIZE) {
-        kcv = kcv.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> kcv_vec(kcv.begin(), kcv.end());
-    while (kcv_vec.size() < BLOCK_SIZE) kcv_vec.push_back(0x00); // Bổ sung nếu thiếu
-
-    vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
-
-    string authenticator_en = bytesToHex(authenticator_en_vec);
-    //// Tạo message gửi đi
-    //string message = OPTION + "|" + ticketV + "|" + authenticator_en;
-
-    //sendToServer(clientSocket, message);
-}
-*/
 
 void processTGSResponse(
     const string& ticketV,
+    const string& iv_ticketV,
     const string& kcv,
     const string& from_time,
     const string& till_time,
@@ -169,7 +93,7 @@ void processTGSResponse(
     string authenticator_en = bytesToHex(authenticator_en_vec);
     cout << "authenticator: " << authenticator << endl;
     // Tạo message gửi tới Server V
-    string message = OPTION + "|" + ticketV + "|" + authenticator_en;
+    string message = OPTION + "|" + ticketV + "||" + iv_ticketV + "|" + authenticator_en + "||" + iv;
 
     // Gửi nếu cần
     sendToServer(clientSocket, message);
@@ -430,6 +354,7 @@ int main() {
     string iv_pre_v = "";
     try {
         iv_pre_v = extractAfterSecondDoublePipe(response_tgs);
+        cout << "iv_pre_v: " << iv_pre_v << endl;
     }
     catch (const exception& ex) {
         cerr << "Error: " << ex.what() << endl << endl;
@@ -444,7 +369,7 @@ int main() {
     //Tách iv TicketV
     string iv_ticket_v = "";
     try {
-        iv_ticket_v = extractAfterSecondDoublePipe(response_tgs);
+        iv_ticket_v = extractAfterFirstDoublePipe(response_tgs);
     }
     catch (const exception& ex) {
         cerr << "Error: " << ex.what() << endl << endl;
@@ -513,9 +438,13 @@ int main() {
         WSACleanup();
         return 1;
     }
-    string iv_str(iv_v.begin(), iv_v.end());
 
-    processTGSResponse(ticket_v_from_tgs, K_c_v, from_time_from_tgs, till_time_from_tgs, realm_v_from_tgs, id_v_from_tgs, client, serverV, iv_str);
+    string iv_client_to_server = generateRandomString();
+
+    cout << "iv_ticket_v: " << iv_ticket_v << endl;
+    cout << "iv_c_t_s: " << iv_client_to_server << endl;
+
+    processTGSResponse(ticket_v_from_tgs, iv_ticket_v, K_c_v, from_time_from_tgs, till_time_from_tgs, realm_v_from_tgs, id_v_from_tgs, client, serverV, iv_client_to_server);
     
     // Nhận dữ liệu phản hồi từ Service Server
     memset(buffer, 0, sizeof(buffer)); // Clear buffer

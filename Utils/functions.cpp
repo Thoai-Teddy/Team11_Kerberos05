@@ -826,7 +826,9 @@ std::string generateRandomString(size_t length) {
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz";
 
-    std::default_random_engine engine(static_cast<unsigned>(time(nullptr)));
+    // Dùng random_device để sinh seed ngẫu nhiên tốt hơn
+    static std::random_device rd;
+    static std::mt19937 engine(rd()); // Mersenne Twister engine
     std::uniform_int_distribution<size_t> dist(0, characters.size() - 1);
 
     std::string result;
