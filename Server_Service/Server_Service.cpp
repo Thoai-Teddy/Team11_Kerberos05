@@ -158,10 +158,8 @@ int main() {
     sockaddr_in serviceAddr, clientAddr;
     int clientAddrLen = sizeof(clientAddr);
     char buffer[2048]; // Tăng kích thước nếu dữ liệu dài hơn
-    string ivAuth = "ImAloneAndAboutY";  // IV cố định để giải mã Authenticator
-    string ivTicket = "HiYouAreNotAlone"; // IV cố định để giải mã Ticket
     string priKeyV = "ThereIsAManOnSky"; // Khóa bí mật của Service Server (16 bytes)
-    string iv = generateRandomString();     // IV để mã hóa phản hồi
+    string iv = generateRandomString();     // random IV để mã hóa phản hồi
 
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 
@@ -192,7 +190,21 @@ int main() {
     string decryptMessage(buffer);
     cout << "Received encrypted service message: " << decryptMessage << "\n";
 
-
+    //Tách iv 
+    string ivAuth = "";  // IV để giải mã Authenticator
+    try {
+        ivAuth = extractAfterSecondDoublePipe(decryptMessage);
+    }
+    catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl << endl;
+    }
+    string ivTicket = ""; // IV để giải mã Ticket
+    try {
+        ivTicket = extractAfterFirstDoublePipe(decryptMessage);
+    }
+    catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl << endl;
+    }
 
     // Tạo đối tượng giả định client info
     info client("client123", "192.168.1.10", "REALM1", "", "");

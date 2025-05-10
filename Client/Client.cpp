@@ -455,7 +455,7 @@ int main() {
         string s(buffer);
         string iv_from_V = "";
         try {
-            iv_from_V = extractAfterSecondDoublePipe(response_from_as);
+            iv_from_V = extractAfterSecondDoublePipe(s);
         }
         catch (const exception& ex) {
             cerr << "Error: " << ex.what() << endl << endl;
