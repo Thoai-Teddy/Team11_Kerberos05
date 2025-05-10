@@ -27,6 +27,20 @@ std::string timeTostring(std::chrono::system_clock::time_point timePoint) {
     return oss.str();  // Không có \n
 }
 
+
+
+string decryptAuthenticatorc(const string& Mess, const string& Kc_tgs, const string& iv_authen) {
+    vector<unsigned char> cipherBytes = hexStringToVector(Mess);
+    vector<unsigned char> key(Kc_tgs.begin(), Kc_tgs.end());
+    vector<unsigned char> ivBytes(iv_authen.begin(), iv_authen.end());
+
+    vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key, ivBytes);
+
+    string decryptedText = unpadString(decryptedBytes);
+
+    return decryptedText;
+}
+
 using namespace std;
 
 int main() {
@@ -81,8 +95,24 @@ int main() {
 
     while (iv_tgs_ticket.size() < BLOCK_SIZE) iv_tgs_ticket.push_back(0x00); // Bổ sung nếu thiếu
 
+    // Tách iv để giải mã authenticatorc
+    string iv_authen = "";
+    try {
+        iv_authen = extractAfterSecondDoublePipe(txt);
+    }
+    catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl << endl;
+    }
 
-	// Tách dữ liệu từ Client
+    if (iv_authen.size() > BLOCK_SIZE) {
+        iv_authen = iv_authen.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> iv_a(iv_authen.begin(), iv_authen.end());
+
+    //message sau khi tách iv
+    //cout << "Response: " << txt << endl << endl;
+
+    while (iv_a.size() < BLOCK_SIZE) iv_a.push_back(0x00); // Bổ sung nếu thiếu
 	std::vector <std::string> client_request_vector = splitString(txt, "|");
     std::string options_from_client = client_request_vector[0];
     std::string id_v_from_client = client_request_vector[1];
@@ -96,8 +126,11 @@ int main() {
     for (size_t i = 7; i < client_request_vector.size(); ++i) {
         if (i > 7) authenticatorc_from_client += "|";  // thêm dấu phân cách
         authenticatorc_from_client += client_request_vector[i];
-        cout << endl << "Authen: " << authenticatorc_from_client << endl << endl;
+        //cout << endl << "Authen: " << authenticatorc_from_client << endl << endl;
     }
+    cout << "Response: " << txt << endl << endl;
+    cout << "Received Authenticatorc: " << authenticatorc_from_client << endl << endl;
+
 
 
     std::string now = get_current_time_formatted();
@@ -110,7 +143,9 @@ int main() {
 
     cout << "Received Ticket TGS: " << ticket_tgs_from_client << "\n";
 
-    cout << "Received Authenticatorc: " << authenticatorc_from_client << "\n";
+	//std::string authenticatorc_decrypt = decryptAuthenticatorc(authenticatorc_from_client, K_c_tgs, iv_authen);
+
+    //cout << "Received Authenticatorc: " << authenticatorc_decrypt << "\n";
 
     //Giải mã Ticket TGS
     std::vector<unsigned char>  ticket_tgs_from_client_vector = hexStringToVector(ticket_tgs_from_client);
@@ -126,6 +161,9 @@ int main() {
     //cout << "Decrypted block size (before unpad): " << plaintext_block_from_as.size() << " bytes" << endl;
 
     string plaintext_from_as = unpadString(plaintext_block_from_as);
+
+    
+
     cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_as << endl << endl;
 
 
@@ -141,6 +179,10 @@ int main() {
     TGS_ticket.times_till = parts_plaintext_from_as[6];
     TGS_ticket.times_rtime = parts_plaintext_from_as[7];
 
+    std::string authenticatorc_decrypt = decryptAuthenticatorc(authenticatorc_from_client, TGS_ticket.sessionKey, iv_authen);
+
+    cout << "Received Authenticatorc: " << authenticatorc_decrypt << "\n";
+
 	//Giải mã Authenticatorc
     //info client("","");
     //std::string iv="ThisIsMyHomeWork";
@@ -148,17 +190,17 @@ int main() {
     //std::string subkey_decrypt= authenAuthenticatorAndGetSubkey(authenticatorc_from_client, client, iv, priKeyV);
 
 
-	AuthenticatorC authenticator_decrypt = parseAuthenticator(authenticatorc_from_client);
+	AuthenticatorC authenticator_de = parseAuthenticator(authenticatorc_decrypt);
 
 
     //Kiểm tra
-    if (TGS_ticket.clientID != authenticator_decrypt.clientID) {
+    if (TGS_ticket.clientID != authenticator_de.clientID) {
         // Sai client → từ chối
         throw std::runtime_error("Client ID mismatch between TicketTGS and AuthenticatorC");
     } else {
 		cout << "Client ID match between TicketTGS and AuthenticatorC" << endl;
     }
-    if (TGS_ticket.realmc != authenticator_decrypt.realmc) {
+    if (TGS_ticket.realmc != authenticator_de.realmc) {
         // Sai realm → từ chối
         throw std::runtime_error("Realm mismatch between TicketTGS and AuthenticatorC");
     }

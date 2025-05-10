@@ -45,7 +45,7 @@ string createAuthenticator(const info& clientInfo, const string& subkey) {
     // Chuyển đổi thời gian TS2 thành chuỗi (ví dụ sử dụng thời gian Unix timestamp)
     auto timestamp = chrono::duration_cast<chrono::seconds>(authenticator.TS2.time_since_epoch()).count();
 
-    // Tạo chuỗi kết quả theo định dạng "clientID||realm||TS2||subkey||seqNum"
+    // Tạo chuỗi kết quả theo định dạng "clientID|realm|TS2|subkey|seqNum"
     return authenticator.clientID + "|" +
         authenticator.realmc + "|" +
         to_string(timestamp) + "|" +
@@ -127,6 +127,21 @@ string decryptMessFromV(const string& encryptMess, const string& Kcv, const stri
     string decryptedText = unpadString(decryptedBytes);
 
     return decryptedText;
+}
+
+
+string encryptAuthenticatorc(const string& Mess, const string& Kc_tgs, const string& iv_authen) {
+    vector<unsigned char> cipherBytes = hexStringToVector(Mess);
+    vector<unsigned char> key(Kc_tgs.begin(), Kc_tgs.end());
+    vector<unsigned char> ivBytes(iv_authen.begin(), iv_authen.end());
+
+    vector<unsigned char> padded_ = padString(Mess);
+    vector<unsigned char> encryptedBytes = aes_cbc_encrypt(padded_, key, ivBytes);
+    string  encryptedText = bytesToHex(encryptedBytes);
+
+
+
+    return encryptedText;
 }
 
 
@@ -323,7 +338,7 @@ int main() {
         WSACleanup();
         return 1;
     }
-    // Gửi thông tin tới TGS Server theo dạng "Options|ID_V|Times|Nonce2|Ticket_TGS|Authenticatorc"
+    // Gửi thông tin tới TGS Server theo dạng "Options|ID_V|Times|Nonce2|Ticket_TGS|Authenticatorc|iv_authen"
     //string Options = "auth";
 	string Ticket_TGS = ticket_tgs_from_as;
     Times = build_times(8, 24);
@@ -332,7 +347,12 @@ int main() {
     string TS2_str = timePointToString(TS2);  // Chuyển TS2 thành chuỗi
 	string subkey = createSubkey(K_c_tgs, TS2_str);
     string Authenticatorc = createAuthenticator(client, subkey);
-    string message_to_tgs = Options + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + Authenticatorc;
+
+	//Mã hóa Authenticatorc 
+    string iv_authen = generateRandomString();
+    cout << "iv_authen: " << iv_authen << endl << endl;
+	string encrypted_authenticator = encryptAuthenticatorc(Authenticatorc, K_c_tgs, iv_authen);
+    string message_to_tgs = Options + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + encrypted_authenticator + "||" + iv_authen ;
 	cout << "Sending message to TGS: " << message_to_tgs << endl << endl;
 
     
