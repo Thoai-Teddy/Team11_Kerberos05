@@ -870,4 +870,19 @@ std::string extractAfterSecondDoublePipe(std::string& input) {
     return result;
 }
 
+//check Time
+std::string check_ticket_time(std::string from, std::string till, std::string rtime) {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
 
+    std::time_t from_c = static_cast<std::time_t>(std::stoll(from));
+    std::time_t till_c = static_cast<std::time_t>(std::stoll(till));
+    std::time_t rtime_c = static_cast<std::time_t>(std::stoll(rtime));
+
+    if (now_c > from_c && now_c < till_c)
+        return "VALID";
+    if (now_c > till_c && now_c < rtime_c)
+        return "RENEW";
+    else
+        return "INVALID";
+}

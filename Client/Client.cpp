@@ -183,7 +183,7 @@ int main() {
 
     cout << "Connected to AS Server." << endl << endl;
 
-    info client("IDCLient", "realmClient");
+    info client("client02", "Kerberos05.COM", "192.168.1.102");
     info serverTGS("IDServerTGS", "RealmServerTGS");
 
     // Cấu hình các giá trị
@@ -470,26 +470,30 @@ int main() {
     memset(buffer, 0, sizeof(buffer)); // Clear buffer
     bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
     if (bytesReceived > 0) {
-        cout << endl << "Receive from V: " << buffer << endl;
-        
         string s(buffer);
-        string iv_from_V = "";
-        try {
-            iv_from_V = extractAfterSecondDoublePipe(s);
-        }
-        catch (const exception& ex) {
-            cerr << "Error: " << ex.what() << endl << endl;
-        }
+        size_t pos = s.find('|');
+        if (pos != std::string::npos) {
+            cout << endl << "Receive from V: " << buffer << endl;
 
-        string decryptedText = decryptMessFromV(s, K_c_v, iv_from_V);
 
-        cout << endl << "Decrypt Mess from V: " << decryptedText << endl;
-        cout << endl << "Kerberos 5 authentication complete!" << endl << endl;
+            string iv_from_V = "";
+            try {
+                iv_from_V = extractAfterSecondDoublePipe(s);
+            }
+            catch (const exception& ex) {
+                cerr << "Error: " << ex.what() << endl << endl;
+            }
+
+            string decryptedText = decryptMessFromV(s, K_c_v, iv_from_V);
+
+            cout << endl << "Decrypt Mess from V: " << decryptedText << endl;
+            cout << endl << "Kerberos 5 authentication complete!" << endl << endl;
+        }
+        else cout << endl << "Receive from V: " << buffer << endl;
     }
     else {
         cerr << "No response or error receiving from Service Server." << endl;
     }
-
 
     // Đóng kết nối với Service Server
     closesocket(clientSocket);

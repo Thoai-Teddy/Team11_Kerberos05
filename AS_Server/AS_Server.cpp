@@ -104,7 +104,7 @@ int main() {
     TGS_ticket.sessionKey = K_c_tgs;
     TGS_ticket.realmc = client.getRealm();
     TGS_ticket.clientID = client.getID();
-    TGS_ticket.clientAD = "192.168.2.5";
+    TGS_ticket.clientAD = "192.168.1.102";
     //TGS_ticket.clientAD = client.getAD();
 
     TGS_ticket.times_from = times_from_from_client;

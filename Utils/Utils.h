@@ -16,6 +16,8 @@
 #include <chrono>
 #include <ctime>
 #include <random>
+#include <soci/soci.h>
+#include <soci/odbc/soci-odbc.h>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -32,6 +34,8 @@ private:
 public:
     info(const std::string& id, const std::string& realm)
         : id(id), realm(realm), ad(""), pub_key(""), pri_key("") {};
+    info(const std::string& id, const std::string& realm, const std::string ad)
+        : id(id), realm(realm), ad(ad), pub_key(""), pri_key("") {};
     // Constructor để khởi tạo các giá trị
     info(const std::string& id, const std::string& ad, const std::string& realm,
         const std::string& pub_key, const std::string& pri_key)
@@ -42,6 +46,9 @@ public:
     std::string getRealm() const;  
     std::string getPublicKey() const; 
     void setPrivateKey(std::string privateKey);
+    void setID(const std::string& newID) { id = newID; }
+    void setAD(const std::string& newAD) { ad = newAD; }
+    void setRealm(const std::string& newRealm) { realm = newRealm; }
 };
 
 
@@ -214,3 +221,6 @@ std::string generateRandomString(size_t length = 16);
 //hàm tách iv khỏi message:
 std::string extractAfterFirstDoublePipe(std::string& input);
 std::string extractAfterSecondDoublePipe(std::string& input);
+
+//check Time
+std::string check_ticket_time(std::string from, std::string till, std::string rtime);
