@@ -643,6 +643,12 @@ chrono::system_clock::time_point millisecTimestampToTimePoint(const string& time
     return chrono::system_clock::time_point(dur);
 }
 
+chrono::system_clock::time_point secondTimestampToTimePoint(const string& ts_str) {
+    uint64_t ts = std::stoull(ts_str);
+    return std::chrono::system_clock::from_time_t(static_cast<time_t>(ts));
+}
+
+
 //Hàm lưu thông tin Ticket sau khi giải mã:
 ServiceTicket parseServiceTicket(const string& decryptedText) {
     // Giả sử format: flags | sessionKey | realmc | clientID | clientAD | from | till | rtime
@@ -668,9 +674,9 @@ ServiceTicket parseServiceTicket(const string& decryptedText) {
     ticket.realmc = fields[2];
     ticket.clientID = fields[3];
     ticket.clientAD = fields[4];
-    ticket.timeInfo.from = millisecTimestampToTimePoint(fields[5]);
-    ticket.timeInfo.till = millisecTimestampToTimePoint(fields[6]);
-    ticket.timeInfo.rtime = millisecTimestampToTimePoint(fields[7]);
+    ticket.timeInfo.from = secondTimestampToTimePoint(fields[5]);
+    ticket.timeInfo.till = secondTimestampToTimePoint(fields[6]);
+    ticket.timeInfo.rtime = secondTimestampToTimePoint(fields[7]);
 
     return ticket;
 }

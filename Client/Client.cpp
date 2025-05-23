@@ -43,7 +43,7 @@ string createAuthenticator(const info& clientInfo, const string& subkey) {
     authenticator.seqNum = 1;         // Số thứ tự (có thể dùng cơ chế tăng dần cho mỗi lần gửi yêu cầu)
 
     // Chuyển đổi thời gian TS2 thành chuỗi (ví dụ sử dụng thời gian Unix timestamp)
-    auto timestamp = chrono::duration_cast<chrono::seconds>(authenticator.TS2.time_since_epoch()).count();
+    std::time_t timestamp = std::chrono::system_clock::to_time_t(authenticator.TS2);
 
     // Tạo chuỗi kết quả theo định dạng "clientID|realm|TS2|subkey|seqNum"
     return authenticator.clientID + "|" +
@@ -52,6 +52,23 @@ string createAuthenticator(const info& clientInfo, const string& subkey) {
         authenticator.subkey + "|" +
         to_string(authenticator.seqNum);
 }
+
+string timePointToString(const chrono::system_clock::time_point& tp) {
+    time_t time = chrono::system_clock::to_time_t(tp);
+    tm* tm = localtime(&time);  // Chuyển đổi thành tm cấu trúc
+    ostringstream oss;
+
+    // Tạo chuỗi thời gian theo định dạng YYYY-MM-DD HH:MM:SS
+    oss << (tm->tm_year + 1900) << "-"
+        << (tm->tm_mon + 1) << "-"
+        << tm->tm_mday << " "
+        << tm->tm_hour << ":"
+        << tm->tm_min << ":"
+        << tm->tm_sec;
+
+    return oss.str();
+}
+
 
 
 void processTGSResponse(
@@ -80,8 +97,12 @@ void processTGSResponse(
     //    throw invalid_argument("Ticket has expired");
     //}
 
+    auto TS2_c_v = chrono::system_clock::now();  // Giả sử TS2 là time_point hiện tại
+    string TS2_c_v_str = timePointToString(TS2_c_v);  // Chuyển TS2 thành chuỗi
+    string subkey = createSubkey(kcv, TS2_c_v_str);
+
     // Tạo AuthenticatorC: E(Kcv, [IDC || RealmC || TS2 || Subkey || Seq#])
-    string authenticator = createAuthenticator(clientInfo, kcv);
+    string authenticator = createAuthenticator(clientInfo, subkey);
     vector<unsigned char> authenticator_vec = padString(authenticator);
 
     // Chuẩn bị key và IV
@@ -103,23 +124,6 @@ void processTGSResponse(
     sendToServer(clientSocket, message);
 }
 
-
-
-string timePointToString(const chrono::system_clock::time_point& tp) {
-    time_t time = chrono::system_clock::to_time_t(tp);
-    tm* tm = localtime(&time);  // Chuyển đổi thành tm cấu trúc
-    ostringstream oss;
-
-    // Tạo chuỗi thời gian theo định dạng YYYY-MM-DD HH:MM:SS
-    oss << (tm->tm_year + 1900) << "-"
-        << (tm->tm_mon + 1) << "-"
-        << tm->tm_mday << " "
-        << tm->tm_hour << ":"
-        << tm->tm_min << ":"
-        << tm->tm_sec;
-
-    return oss.str();
-}
 
 string decryptMessFromV(const string& encryptMess, const string& Kcv, const string& iv_str) {
     vector<unsigned char> cipherBytes = hexStringToVector(encryptMess);

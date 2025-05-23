@@ -20,11 +20,18 @@ std::chrono::system_clock::time_point parse_time(const std::string& time_str) {
 uint64_t time_point_to_uint64(const std::chrono::system_clock::time_point& tp) {
     return static_cast<uint64_t>(std::chrono::system_clock::to_time_t(tp));
 }
+/*
 std::string timeTostring(std::chrono::system_clock::time_point timePoint) {
     std::time_t timeT = std::chrono::system_clock::to_time_t(timePoint);
     std::ostringstream oss;
     oss << std::put_time(std::localtime(&timeT), "%a %b %d %H:%M:%S %Y");
     return oss.str();  // Không có \n
+}
+*/
+
+std::string timeTostring(std::chrono::system_clock::time_point timePoint) {
+    std::time_t timeT = std::chrono::system_clock::to_time_t(timePoint);
+    return std::to_string(timeT);
 }
 
 

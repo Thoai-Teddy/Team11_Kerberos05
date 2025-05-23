@@ -140,6 +140,7 @@ std::string createSubkey(const std::string& key, const std::string& data);
 
 // Hàm hỗ trợ: chuyển timestamp dạng chuỗi sang std::chrono::system_clock::time_point
 chrono::system_clock::time_point millisecTimestampToTimePoint(const string& timestampStr);
+chrono::system_clock::time_point secondTimestampToTimePoint(const string& ts_str);
 
 //hash SHA1
 uint32_t left_rotate(uint32_t value, unsigned int count);
