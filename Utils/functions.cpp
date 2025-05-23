@@ -1,12 +1,5 @@
 ﻿#include "./Utils.h"
 
-//Option step 5
-enum APOptions {
-    RESERVED = 1u << 31,       // Bit 0 (MSB)
-    USE_SESSION_KEY = 1u << 30,// Bit 1
-    MUTUAL_REQUIRED = 1u << 29 // Bit 2
-};
-
 const int BLOCK_SIZE = 16;
 const int Nk = 4;          // 8 words * 4 bytes = 32 bytes = 256 bits
 const int Nr = 10;         // 14 rounds cho AES-256
@@ -945,4 +938,53 @@ bool checkAPOptionsFromBitString(const std::string& bitStr) {
     bool mutualRequired = (options & MUTUAL_REQUIRED) != 0;
 
     return (useSessionKey && mutualRequired);
+}
+
+//kiểm tra flag renewable
+bool hasRenewableFlag(const std::string& bitString) {
+    // Kiểm tra độ dài chuỗi phải là 32 ký tự (bitset<32>)
+    if (bitString.length() != 32) return false;
+
+    // RENEWABLE nằm ở bit số 30 từ trái sang phải (bit số 1 từ phải sang nếu tính theo giá trị enum)
+    // Do std::bitset tạo chuỗi từ MSB -> LSB, ta cần truy cập đúng vị trí
+    // Bit thấp nhất (LSB - vị trí 31) là bit 0 => RENEWABLE = 1 << 1 => vị trí 30
+    return bitString[30] == '1';
+}
+
+//kiểm tra nếu Option là RENEW
+bool isRenewOption(const std::string& bitString) {
+    // Kiểm tra độ dài hợp lệ
+    if (bitString.length() != 32) return false;
+
+    // RENEW = 1 << 1 → bit số 1 → tương ứng vị trí 30 trong chuỗi
+    // Vì std::bitset<32> tạo chuỗi theo thứ tự từ MSB đến LSB (bit 31 xuống bit 0)
+    return bitString[30] == '1';
+}
+
+//hàm tách option và ticket cần renew
+void extractOptionAndTicket(string& input, string& option, string& ticket, string& iv_v) {
+    size_t pos_pipe = input.find('|');
+    if (pos_pipe == string::npos) {
+        throw invalid_argument("Can not find '|' in message!");
+    }
+
+    string beforePipe = input.substr(0, pos_pipe);
+    input = input.substr(pos_pipe + 1);  // phần còn lại sau dấu '|'
+
+    // Tìm 2 dấu "||"
+    size_t first_double_pipe = beforePipe.find("||");
+    if (first_double_pipe != string::npos) {
+        size_t second_double_pipe = beforePipe.find("||", first_double_pipe + 2);
+        if (second_double_pipe != string::npos) {
+            option = beforePipe.substr(0, first_double_pipe);
+            ticket = beforePipe.substr(first_double_pipe + 2, second_double_pipe - (first_double_pipe + 2));
+            iv_v = beforePipe.substr(second_double_pipe + 2);
+            return;
+        }
+    }
+
+    // Trường hợp không có đủ hai dấu ||
+    option = beforePipe;
+    ticket = "";
+    iv_v = "";
 }

@@ -357,97 +357,126 @@ int main() {
     string Authenticatorc = createAuthenticator(client, subkey);
 
 	//Mã hóa Authenticatorc 
-    string iv_authen = generateRandomString();
-    cout << "iv_authen: " << iv_authen << endl << endl;
-	string encrypted_authenticator = encryptAuthenticatorc(Authenticatorc, K_c_tgs, iv_authen);
-    string message_to_tgs = Options + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + encrypted_authenticator + "||" + iv_authen ;
-	cout << "Sending message to TGS: " << message_to_tgs << endl << endl;
+    string realm_c_from_tgs, id_c_from_tgs, ticket_v_from_tgs, ciphertext_hex_from_tgs;
+    string K_c_v, from_time_from_tgs, till_time_from_tgs, rtime_time_from_tgs, nonce2_from_tgs, realm_v_from_tgs, id_v_from_tgs;
+    string message_to_tgs;
+    int bytesReceived;
+    string iv_ticket_v;
 
-    
-    send_message(clientSocket, message_to_tgs);
+    uint32_t Option;
+    bool renewable = false;
+    int count = 0;
+    do {
+        string iv_authen = generateRandomString();
+        cout << "iv_authen: " << iv_authen << endl << endl;
+        string encrypted_authenticator = encryptAuthenticatorc(Authenticatorc, K_c_tgs, iv_authen);
+        if (count == 0) {
+            Option = OP_NONE;
 
-    int bytesReceived = 0;
+            message_to_tgs = Options + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + encrypted_authenticator + "||" + iv_authen;
+            cout << "Sending message to TGS: " << message_to_tgs << endl << endl;
+        }
+        else {
+            Option = RENEW;
+            message_to_tgs = Options + "||" + ticket_v_from_tgs + "||" + iv_ticket_v + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + encrypted_authenticator + "||" + iv_authen;
+            cout << "Sending message to TGS " << "(" << count << " times) : " << message_to_tgs << endl << endl;
+        }
 
-    // Nhận Service Ticket từ TGS Server
-    memset(buffer, 0, sizeof(buffer)); // Clear buffer
-    bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-    if (bytesReceived > 0) {
-        cout << "Received Service Ticket: " << buffer << endl << endl;
-    }
+        send_message(clientSocket, message_to_tgs);
 
-    // Tách dữ liệu mà server trả về
-    string response_tgs(buffer);
-    // Tách iv để giải mã plaintext
-    //string iv_pre_v = "ImAloneAndAboutY";
-    string iv_pre_v = "";
-    try {
-        iv_pre_v = extractAfterSecondDoublePipe(response_tgs);
-        cout << "iv_pre_v: " << iv_pre_v << endl;
-    }
-    catch (const exception& ex) {
-        cerr << "Error: " << ex.what() << endl << endl;
-    }
-    if (iv_pre_v.size() > BLOCK_SIZE) {
-        iv_pre_v = iv_pre_v.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> iv_v(iv_pre_v.begin(), iv_pre_v.end());
+        bytesReceived = 0;
 
-    while (iv_v.size() < BLOCK_SIZE) iv_v.push_back(0x00); // Bổ sung nếu thiếu
+        // Nhận Service Ticket từ TGS Server
+        memset(buffer, 0, sizeof(buffer)); // Clear buffer
+        bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+        if (bytesReceived > 0) {
+            cout << "Received Service Ticket: " << buffer << endl << endl;
+        }
 
-    //Tách iv TicketV
-    string iv_ticket_v = "";
-    try {
-        iv_ticket_v = extractAfterFirstDoublePipe(response_tgs);
-    }
-    catch (const exception& ex) {
-        cerr << "Error: " << ex.what() << endl << endl;
-    }
+        // Tách dữ liệu mà server trả về
+        string response_tgs(buffer);
+        // Tách iv để giải mã plaintext
+        //string iv_pre_v = "ImAloneAndAboutY";
+        string iv_pre_v = "";
+        try {
+            iv_pre_v = extractAfterSecondDoublePipe(response_tgs);
+            cout << "iv_pre_v: " << iv_pre_v << endl;
+        }
+        catch (const exception& ex) {
+            cerr << "Error: " << ex.what() << endl << endl;
+        }
+        if (iv_pre_v.size() > BLOCK_SIZE) {
+            iv_pre_v = iv_pre_v.substr(0, BLOCK_SIZE);
+        }
+        vector<unsigned char> iv_v(iv_pre_v.begin(), iv_pre_v.end());
 
-    vector <string> response_tgs_part = splitString(response_tgs, "|");
+        while (iv_v.size() < BLOCK_SIZE) iv_v.push_back(0x00); // Bổ sung nếu thiếu
 
-    if (response_tgs_part.size() < 4)
-    {
-        cout << "Error: Response from AS Server is invalid!" << endl << endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return -1;
-    }
+        //Tách iv TicketV
+        iv_ticket_v = "";
+        try {
+            iv_ticket_v = extractAfterFirstDoublePipe(response_tgs);
+        }
+        catch (const exception& ex) {
+            cerr << "Error: " << ex.what() << endl << endl;
+        }
 
-    string realm_c_from_tgs = response_tgs_part[0];
-    string id_c_from_tgs = response_tgs_part[1];
-    string ticket_v_from_tgs = response_tgs_part[2];
-    string ciphertext_hex_from_tgs = response_tgs_part[3];
+        vector <string> response_tgs_part = splitString(response_tgs, "|");
 
-    vector<unsigned char> ciphertext_block_from_tgs = hexStringToVector(ciphertext_hex_from_tgs);
+        if (response_tgs_part.size() < 4)
+        {
+            cout << "Error: Response from AS Server is invalid!" << endl << endl;
+            closesocket(clientSocket);
+            WSACleanup();
+            return -1;
+        }
 
+        realm_c_from_tgs = response_tgs_part[0];
+        id_c_from_tgs = response_tgs_part[1];
+        ticket_v_from_tgs = response_tgs_part[2];
+        ciphertext_hex_from_tgs = response_tgs_part[3];
 
-    // Giải mã
-    if (K_c_tgs.size() > BLOCK_SIZE) {
-        K_c_tgs = K_c_tgs.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> Key_c_tgs(K_c_tgs.begin(), K_c_tgs.end());
-
-    while (Key_c_tgs.size() < BLOCK_SIZE) Key_c_tgs.push_back(0x00); // Bổ sung nếu thiếu
-
-    vector<unsigned char> plaintext_block_from_tgs = aes_cbc_decrypt(ciphertext_block_from_tgs, Key_c_tgs, iv_v);
-    string plaintext_from_tgs = unpadString(plaintext_block_from_tgs);
-    cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_tgs << endl << endl;
-
-    vector <string> parts_plaintext_from_tgs = splitString(plaintext_from_tgs, "|");
-
-    string K_c_v = parts_plaintext_from_tgs[0];
-    string from_time_from_tgs = parts_plaintext_from_tgs[1];
-    string till_time_from_tgs = parts_plaintext_from_tgs[2];
-    string rtime_time_from_tgs = parts_plaintext_from_tgs[3];
-    string nonce2_from_tgs = parts_plaintext_from_tgs[4];
-    string realm_v_from_tgs = parts_plaintext_from_tgs[5];
-    string id_v_from_tgs = parts_plaintext_from_tgs[6];
+        vector<unsigned char> ciphertext_block_from_tgs = hexStringToVector(ciphertext_hex_from_tgs);
 
 
+        // Giải mã
+        if (K_c_tgs.size() > BLOCK_SIZE) {
+            K_c_tgs = K_c_tgs.substr(0, BLOCK_SIZE);
+        }
+        vector<unsigned char> Key_c_tgs(K_c_tgs.begin(), K_c_tgs.end());
 
-    if (nonce2_from_tgs != Nonce2) {
-        cout << "WARNING! DIFFERENT NONCE! THIS MAY BE A REPLAY ATTACK!" << endl << endl;
-    }
+        while (Key_c_tgs.size() < BLOCK_SIZE) Key_c_tgs.push_back(0x00); // Bổ sung nếu thiếu
+
+        vector<unsigned char> plaintext_block_from_tgs = aes_cbc_decrypt(ciphertext_block_from_tgs, Key_c_tgs, iv_v);
+        string plaintext_from_tgs = unpadString(plaintext_block_from_tgs);
+        cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_tgs << endl << endl;
+
+        vector <string> parts_plaintext_from_tgs = splitString(plaintext_from_tgs, "|");
+
+        K_c_v = parts_plaintext_from_tgs[0];
+        from_time_from_tgs = parts_plaintext_from_tgs[1];
+        till_time_from_tgs = parts_plaintext_from_tgs[2];
+        rtime_time_from_tgs = parts_plaintext_from_tgs[3];
+        nonce2_from_tgs = parts_plaintext_from_tgs[4];
+        realm_v_from_tgs = parts_plaintext_from_tgs[5];
+        id_v_from_tgs = parts_plaintext_from_tgs[6];
+
+
+
+        if (nonce2_from_tgs != Nonce2) {
+            cout << "WARNING! DIFFERENT NONCE! THIS MAY BE A REPLAY ATTACK!" << endl << endl;
+        }
+        
+        //kiểm tra thời hạn vé
+        string checkT = check_ticket_time(from_time_from_tgs, till_time_from_tgs, rtime_time_from_tgs);
+        if (checkT == "RENEW") {
+            renewable = true;
+            count++;
+        }
+
+        //test renew
+        //count++;
+    } while (renewable/* || count == 0*/);
 
     // Đóng kết nối với TGS Server
     closesocket(clientSocket);

@@ -24,6 +24,25 @@
 
 using namespace std;
 
+//Option step 5
+enum APOptions {
+    RESERVED = 1u << 31,       // Bit 0 (MSB)
+    USE_SESSION_KEY = 1u << 30,// Bit 1
+    MUTUAL_REQUIRED = 1u << 29 // Bit 2
+};
+
+// Định nghĩa Option và Flag:
+enum Option : uint32_t {
+    OP_NONE = 0,
+    OP_INITIAL = 1 << 0,
+    RENEW = 1 << 1
+};
+
+enum TicketFlag : uint32_t {
+    INITIAL = 1 << 0,
+    RENEWABLE = 1 << 1
+};
+
 class info {
 private:
     std::string id;
@@ -232,3 +251,10 @@ std::string check_ticket_time(std::string from, std::string till, std::string rt
 uint32_t createAPOptions(bool useSessionKey, bool mutualRequired);
 std::string apOptionsToBitString(uint32_t options); //trả về chuỗi nhị phân
 bool checkAPOptionsFromBitString(const std::string& bitStr); //check option in step 5
+
+//kiểm tra flag renewable
+bool hasRenewableFlag(const string& bitString);
+//kiểm tra nếu Option là RENEW
+bool isRenewOption(const std::string& bitString);
+//hàm tách option và ticket cần renew
+void extractOptionAndTicket(string& input, string& option, string& ticket, string& iv_v);
