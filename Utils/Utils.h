@@ -1,7 +1,5 @@
 ﻿#pragma once
 
-#define _CRT_SECURE_NO_WARNINGS
-
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iostream>
@@ -16,6 +14,8 @@
 #include <chrono>
 #include <ctime>
 #include <random>
+#include <soci/soci.h>
+#include <soci/odbc/soci-odbc.h>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -196,9 +196,11 @@ struct Ticket {
 };
 
 
-
-
 std::string generate_nonce(int length);
+
+std::string create_ticket_time(int ticket_lifetime, int renew_lifetime);
+
+std::string check_ticket_time(std::string from, std::string till, std::string rtime);
 
 std::string get_current_time_formatted();
 

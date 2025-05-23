@@ -1,7 +1,9 @@
-﻿#include "../Utils/Utils.h"
+﻿
+#include "../Utils/Utils.h"
 const int BLOCK_SIZE = 16;
 
 int main() {
+
     WSADATA wsaData;
     SOCKET asSocket, clientSocket;
     sockaddr_in asAddr, clientAddr;
@@ -45,16 +47,21 @@ int main() {
     std::string times_rtime_from_client = client_request_vector[6];
     std::string nonce1_from_client = client_request_vector[7];
 
+
     info client(id_c_from_client, realm_c_from_client);
 
-    std::string now = get_current_time_formatted();
-    if (now < times_from_from_client || now > times_till_from_client)
-    {
+    string check_time = check_ticket_time(times_from_from_client, times_till_from_client, times_rtime_from_client);
+    if (check_time == "INVALID"){
         string error = "Cannot create TGS ticket!Ticket has expired!";
         cout << error << endl << endl;
         send_message(clientSocket, error);
     }
-
+    else if (check_time == "RENEW") {
+        string error = "Cannot create TGS ticket!Ticket must be renewed!";
+        cout << error << endl << endl;
+        send_message(clientSocket, error);
+    }
+    
     // Sinh khóa K_c,tgs, hiện tại đang để mặc định
     std::string K_c_tgs = "HelloNiceToMeetU";
 
@@ -105,8 +112,6 @@ int main() {
     TGS_ticket.realmc = client.getRealm();
     TGS_ticket.clientID = client.getID();
     TGS_ticket.clientAD = "192.168.2.5";
-    //TGS_ticket.clientAD = client.getAD();
-
     TGS_ticket.times_from = times_from_from_client;
     TGS_ticket.times_till = times_till_from_client;
     TGS_ticket.times_rtime = times_rtime_from_client;
@@ -141,7 +146,7 @@ int main() {
 
 
     // Gửi dữ liệu về cho client
-    string response = client.getRealm() + "|" + client.getID() + "|" + TGS_ticket_encrypted_str + "||" + iv_pre_tgs_ticket + "|" + ciphertext_str + "||" + iv_pre;
+    string response = client.getRealm() + "|" + client.getID() + "|" + TGS_ticket_encrypted_str + "|" + iv_pre_tgs_ticket + "|" + ciphertext_str + "|" + iv_pre;
     cout << "Response from server: " << response << endl << endl;
     send_message(clientSocket, response);
 

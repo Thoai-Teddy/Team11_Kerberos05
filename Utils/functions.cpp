@@ -1,5 +1,6 @@
 ﻿#include "./Utils.h"
 
+//=========================CÁC HÀM HỖ TRỢ MÃ HÓA, GIẢI MÃ AES=========================
 const int BLOCK_SIZE = 16;
 const int Nk = 4;          // 8 words * 4 bytes = 32 bytes = 256 bits
 const int Nr = 10;         // 14 rounds cho AES-256
@@ -66,28 +67,6 @@ unsigned char rsbox[256] = {
   0x17,0x2B,0x04,0x7E,0xBA,0x77,0xD6,0x26,
   0xE1,0x69,0x14,0x63,0x55,0x21,0x0C,0x7D
 };
-
-
-//class info
-std::string info::getID() const {
-    return id;
-};
-
-std::string info::getAD() const {
-    return ad;
-};
-
-std::string info::getRealm() const {
-    return realm;
-};
-
-std::string info::getPublicKey() const {
-    return pub_key;
-};
-
-void info::setPrivateKey(std::string privateKey) {
-    this->pri_key = privateKey;
-}
 
 // Hàm dịch bit trái
 uint32_t left_rotate(uint32_t value, unsigned int count) {
@@ -332,7 +311,7 @@ void KeyExpansion(const unsigned char* key, unsigned char* roundKeys) {
     }
 }
 void aes_encrypt_block(unsigned char* block, const unsigned char* key) {
-    unsigned char roundKeys[240];
+    unsigned char roundKeys[176];
     KeyExpansion(key, roundKeys);
 
     AddRoundKey(block, roundKeys);
@@ -473,7 +452,7 @@ void unpadding(vector<unsigned char>& data) {
     data.resize(data.size() - pad_len);
 }
 void aes_decrypt_block(unsigned char* block, const unsigned char* key) {
-    unsigned char roundKeys[240]; // AES-256
+    unsigned char roundKeys[176]; // AES-256
     KeyExpansion(key, roundKeys);
 
     unsigned char state[BLOCK_SIZE];
@@ -546,7 +525,29 @@ string unpadString2(const vector<unsigned char>& input) {
 }
 
 
+//=========================CÁC HÀM XỬ LÝ CÁC THUỘC TÍNH TRONG CLASS, STRUCT=========================
+//class info
+std::string info::getID() const {
+    return id;
+};
 
+std::string info::getAD() const {
+    return ad;
+};
+
+std::string info::getRealm() const {
+    return realm;
+};
+
+std::string info::getPublicKey() const {
+    return pub_key;
+};
+
+void info::setPrivateKey(std::string privateKey) {
+    this->pri_key = privateKey;
+}
+
+//=========================CÁC HÀM HỖ TRỢ=========================
 // Hàm tách chuỗi dựa trên dấu phân cách
 std::vector<std::string> splitString(const std::string& input, const std::string& delimiter) {
     std::vector<std::string> tokens;
@@ -559,32 +560,68 @@ std::vector<std::string> splitString(const std::string& input, const std::string
     return tokens;
 }
 
-std::chrono::system_clock::time_point parseTimestamp(const std::string& timestamp) {
-    std::tm tm = {};
-    std::istringstream ss(timestamp);
+// Hàm tạo nonce ngẫu nhiên
+std::string generate_nonce(int length) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 255);
 
-    // đọc chuỗi theo định dạng ngày giờ
-    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S"); // định dạng tương ứng với chuỗi nhập vào
-    if (ss.fail()) {
-        throw std::invalid_argument("invalid timestamp format");
+    std::stringstream nonce;
+    for (int i = 0; i < length; ++i) {
+        unsigned char byte = static_cast<unsigned char>(dis(gen));
+        nonce << std::hex << std::setw(2) << std::setfill('0') << (int)byte;
     }
-
-    std::time_t time = std::mktime(&tm);  // chuyển std::tm thành time_t
-    return std::chrono::system_clock::from_time_t(time);  // chuyển time_t thành time_point
+    return nonce.str();
 }
 
-std::string trim(const std::string& s) {
-    auto start = s.begin();
-    while (start != s.end() && std::isspace(*start)) start++;
+std::string create_ticket_time(int ticket_lifetime, int renew_lifetime) {
+    auto from_time = std::chrono::system_clock::now();
+    std::time_t from_c = std::chrono::system_clock::to_time_t(from_time);
 
-    auto end = s.end();
-    do {
-        end--;
-    } while (std::distance(start, end) > 0 && std::isspace(*end));
+    // Till = From + ticket_lifetime tiếng (ticket có thể dùng trong ticket_lifetime phút)
+    auto till_time = std::chrono::system_clock::now() + std::chrono::minutes(ticket_lifetime);
+    std::time_t till_c = std::chrono::system_clock::to_time_t(till_time);
 
-    return std::string(start, end + 1);
+
+    // Rtime = Till + renew_lifetime tiếng (vé có thể gia hạn thêm renew_lifetime phút)
+    auto rtime_time = till_time + std::chrono::minutes(renew_lifetime);
+    std::time_t rtime_c = std::chrono::system_clock::to_time_t(rtime_time);
+
+    // Ghép lại thành Times
+    return std::to_string(from_c) + "|" + std::to_string(till_c) + "|" + std::to_string(rtime_c);
 }
 
+std::string check_ticket_time(std::string from, std::string till, std::string rtime) {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+
+    std::time_t from_c = static_cast<std::time_t>(std::stoll(from));
+    std::time_t till_c = static_cast<std::time_t>(std::stoll(till));
+    std::time_t rtime_c = static_cast<std::time_t>(std::stoll(rtime));
+
+    if (now_c >= from_c && now_c <= till_c)
+        return "VALID";
+    if (now_c > till_c && now_c < rtime_c)
+        return "RENEW";
+    else
+        return "INVALID";
+}
+
+// Hàm gửi message
+void send_message(SOCKET sock, const std::string& message)
+{
+    send(sock, message.c_str(), message.size(), 0);
+}
+
+// Hàm nhận message
+std::string receive_message(SOCKET sock) {
+    char buffer[4096];
+    int bytesReceived = recv(sock, buffer, sizeof(buffer), 0);
+    if (bytesReceived == SOCKET_ERROR) {
+        throw std::runtime_error("Receive failed");
+    }
+    return std::string(buffer, bytesReceived);
+}
 
 //=============== Step 6===============:
 ServiceTicket createServiceTicket(const std::string& clientID, const std::string& flags, const std::string& sessionKey,
@@ -627,7 +664,6 @@ std::string createSubkey(const std::string& key, const std::string& data) { // d
 
     return hash_result;
 }
-
 
 // Hàm hỗ trợ: chuyển timestamp dạng chuỗi sang std::chrono::system_clock::time_point
 chrono::system_clock::time_point millisecTimestampToTimePoint(const string& timestampStr) {
@@ -731,9 +767,6 @@ void splitAndAssign(const std::string& input, std::string& a, std::string& b, st
     }
 }
 
-
-
-
 uint64_t getCurrentTimestamp() {
     auto now = std::chrono::system_clock::now();
     auto duration = now.time_since_epoch();
@@ -760,65 +793,6 @@ std::string buildServiceTicketPlaintext(const std::string& flag,
     return plaintext.str();
 }
 
-
-std::string generate_nonce(int length) {
-    std::random_device rd;
-    std::mt19937 gen(rd()); 
-    std::uniform_int_distribution<> dis(0, 255);
-
-    std::stringstream nonce;
-    for (int i = 0; i < length; ++i) {
-        unsigned char byte = static_cast<unsigned char>(dis(gen));
-        nonce << std::hex << std::setw(2) << std::setfill('0') << (int)byte;
-    }
-    return nonce.str();
-}
-
-// Hàm format thời gian thành string
-std::string get_current_time_formatted() {
-    auto now = std::chrono::system_clock::now();
-    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::gmtime(&now_c), "%Y%m%d%H%M%S"); // format: YYYYMMDDhhmmss
-    return ss.str();
-}
-
-std::string build_times(int ticket_lifetime, int renew_lifetime) {
-    std::string from = get_current_time_formatted();
-
-    // Till = From + ticket_lifetime tiếng (ticket có thể dùng trong ticket_lifetime tiếng)
-    auto till_time = std::chrono::system_clock::now() + std::chrono::hours(ticket_lifetime);
-    std::time_t till_c = std::chrono::system_clock::to_time_t(till_time);
-    std::stringstream ss_till;
-    ss_till << std::put_time(std::gmtime(&till_c), "%Y%m%d%H%M%S");
-    std::string till = ss_till.str();
-
-    // Rtime = Till + renew_lifetime tiếng (vé có thể gia hạn thêm renew_lifetime tiếng)
-    auto rtime_time = till_time + std::chrono::hours(renew_lifetime);
-    std::time_t rtime_c = std::chrono::system_clock::to_time_t(rtime_time);
-    std::stringstream ss_rtime;
-    ss_rtime << std::put_time(std::gmtime(&rtime_c), "%Y%m%d%H%M%S");
-    std::string rtime = ss_rtime.str();
-
-    // Ghép lại thành Times
-    return from + "|" + till + "|" + rtime;
-}
-
-void send_message(SOCKET sock, const std::string& message)
-{
-    send(sock, message.c_str(), message.size(), 0);
-}
-
-std::string receive_message(SOCKET sock) {
-    char buffer[4096];
-    int bytesReceived = recv(sock, buffer, sizeof(buffer), 0);
-    if (bytesReceived == SOCKET_ERROR) {
-        throw std::runtime_error("Receive failed");
-    }
-    return std::string(buffer, bytesReceived);
-}
-
-
 // Hàm tạo chuỗi 16 ký tự ngẫu nhiên (dùng để tạo key và iv)
 std::string generateRandomString(size_t length) {
     const std::string characters =
@@ -838,7 +812,7 @@ std::string generateRandomString(size_t length) {
     return result;
 }
 
-
+// Hàm tách chuỗi
 std::string extractAfterFirstDoublePipe(std::string& input) {
     size_t start = input.find("||");
     if (start == std::string::npos)
@@ -871,3 +845,58 @@ std::string extractAfterSecondDoublePipe(std::string& input) {
 }
 
 
+// Hàm format thời gian thành string
+std::string get_current_time_formatted() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::gmtime(&now_c), "%Y%m%d%H%M%S"); // format: YYYYMMDDhhmmss
+    return ss.str();
+}
+
+std::string build_times(int ticket_lifetime, int renew_lifetime) {
+    std::string from = get_current_time_formatted();
+
+    // Till = From + ticket_lifetime tiếng (ticket có thể dùng trong ticket_lifetime tiếng)
+    auto till_time = std::chrono::system_clock::now() + std::chrono::hours(ticket_lifetime);
+    std::time_t till_c = std::chrono::system_clock::to_time_t(till_time);
+    std::stringstream ss_till;
+    ss_till << std::put_time(std::gmtime(&till_c), "%Y%m%d%H%M%S");
+    std::string till = ss_till.str();
+
+    // Rtime = Till + renew_lifetime tiếng (vé có thể gia hạn thêm renew_lifetime tiếng)
+    auto rtime_time = till_time + std::chrono::hours(renew_lifetime);
+    std::time_t rtime_c = std::chrono::system_clock::to_time_t(rtime_time);
+    std::stringstream ss_rtime;
+    ss_rtime << std::put_time(std::gmtime(&rtime_c), "%Y%m%d%H%M%S");
+    std::string rtime = ss_rtime.str();
+
+    // Ghép lại thành Times
+    return from + "|" + till + "|" + rtime;
+}
+
+std::chrono::system_clock::time_point parseTimestamp(const std::string& timestamp) {
+    std::tm tm = {};
+    std::istringstream ss(timestamp);
+
+    // đọc chuỗi theo định dạng ngày giờ
+    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S"); // định dạng tương ứng với chuỗi nhập vào
+    if (ss.fail()) {
+        throw std::invalid_argument("invalid timestamp format");
+    }
+
+    std::time_t time = std::mktime(&tm);  // chuyển std::tm thành time_t
+    return std::chrono::system_clock::from_time_t(time);  // chuyển time_t thành time_point
+}
+
+std::string trim(const std::string& s) {
+    auto start = s.begin();
+    while (start != s.end() && std::isspace(*start)) start++;
+
+    auto end = s.end();
+    do {
+        end--;
+    } while (std::distance(start, end) > 0 && std::isspace(*end));
+
+    return std::string(start, end + 1);
+}

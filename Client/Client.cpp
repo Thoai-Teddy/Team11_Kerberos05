@@ -188,7 +188,7 @@ int main() {
 
     // Cấu hình các giá trị
     string Options = "auth";
-    string Times = build_times(8, 24);
+    string Times = create_ticket_time(3, 5);
     string Nonce1 = generate_nonce(8); // Random 8 bytes
 
     string request = Options + "|" + client.getID() + "|" + client.getRealm() + "|" + serverTGS.getID() + "|" + Times + "|" + Nonce1;
@@ -198,8 +198,10 @@ int main() {
     send_message(clientSocket, request);
 
     string response_from_as = receive_message(clientSocket);
+    cout << "Response_from_as: " << response_from_as << endl;
 
     //Lấy iv
+    /*
     string iv_tgs = "";
     try {
         iv_tgs = extractAfterFirstDoublePipe(response_from_as);
@@ -218,16 +220,15 @@ int main() {
     if (iv_pre.size() > BLOCK_SIZE) {
         iv_pre = iv_pre.substr(0, BLOCK_SIZE);
     }
-    vector<unsigned char> iv(iv_pre.begin(), iv_pre.end());
-    while (iv.size() < BLOCK_SIZE) iv.push_back(0x00); // Bổ sung nếu thiếu
 
-    //message sau khi tách iv
+     //message sau khi tách iv
     cout << "Response from AS: " << response_from_as << endl << endl;
-
+    */
+   
     // Tách dữ liệu mà server trả về
     vector <string> response_part = splitString(response_from_as, "|");
 
-    if (response_part.size() < 4)
+    if (response_part.size() < 6)
     {
         cout << "Error: Response from AS Server is invalid!" << endl << endl;
         closesocket(clientSocket);
@@ -238,9 +239,14 @@ int main() {
     string realm_c_from_as = response_part[0];
     string id_c_from_as = response_part[1];
     string ticket_tgs_from_as = response_part[2];
-    string ciphertext_hex_from_as = response_part[3];
-   
+    string iv_for_tgs_ticket = response_part[3];
+    string ciphertext_hex_from_as = response_part[4];
+    string iv_for_message_from_as = response_part[5];
+
     vector<unsigned char> ciphertext_block_from_as = hexStringToVector(ciphertext_hex_from_as);
+
+    vector<unsigned char> iv_vector_for_message_from_as(iv_for_message_from_as.begin(), iv_for_message_from_as.end());
+    while (iv_vector_for_message_from_as.size() < BLOCK_SIZE) iv_vector_for_message_from_as.push_back(0x00); // Bổ sung nếu thiếu
     
     // Lấy client_key
     string K_c = "TonightIWillSing";
@@ -253,7 +259,7 @@ int main() {
     while (key_client.size() < BLOCK_SIZE) key_client.push_back(0x00); // Bổ sung nếu thiếu
 
     // Giải mã
-    vector<unsigned char> plaintext_block_from_as = aes_cbc_decrypt(ciphertext_block_from_as, key_client, iv);
+    vector<unsigned char> plaintext_block_from_as = aes_cbc_decrypt(ciphertext_block_from_as, key_client, iv_vector_for_message_from_as);
     string plaintext_from_as = unpadString(plaintext_block_from_as);
     cout << "Plaintext after decrypted with K_c: " << plaintext_from_as << endl << endl;
 
@@ -352,7 +358,7 @@ int main() {
     string iv_authen = generateRandomString();
     cout << "iv_authen: " << iv_authen << endl << endl;
 	string encrypted_authenticator = encryptAuthenticatorc(Authenticatorc, K_c_tgs, iv_authen);
-    string message_to_tgs = Options + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + encrypted_authenticator + "||" + iv_authen ;
+    string message_to_tgs = Options + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_for_tgs_ticket + "|" + encrypted_authenticator + "||" + iv_authen ;
 	cout << "Sending message to TGS: " << message_to_tgs << endl << endl;
 
     
