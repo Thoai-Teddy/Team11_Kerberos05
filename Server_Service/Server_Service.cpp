@@ -23,7 +23,7 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
 
     cout << "IDC: " << ticket.clientID << endl
         << "ADC: " << ticket.clientAD << endl
-        << "RealmC: " << ticket.realmc << endl << endl;
+        << "RealmC: " << ticket.realmc << endl;
 
     // Bước 6: Xác thực
     //Connect to DB SQL Server
@@ -72,15 +72,6 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
         }
     }
     else return "mismatch!";
-    /*if (ticket.clientID != client.getID()) {
-        return "mismatch!";
-    }
-    if (ticket.clientAD != client.getAD()) {
-        return "mismatch!";
-    }
-    if (ticket.realmc != client.getRealm()) {
-        return "mismatch!";
-    }*/
 
     /*auto now = chrono::system_clock::now();
     if (now < ticket.timeInfo.from || now > ticket.timeInfo.till) {
@@ -88,19 +79,21 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
         return "mismatch!";
     }*/
 
-    /*time_t from = chrono::system_clock::to_time_t(ticket.timeInfo.from);
+    time_t from = chrono::system_clock::to_time_t(ticket.timeInfo.from);
     time_t till = chrono::system_clock::to_time_t(ticket.timeInfo.till);
     time_t rtime = chrono::system_clock::to_time_t(ticket.timeInfo.rtime);
+    time_t t_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-    string checkTime = check_ticket_time(to_string(from), to_string(till), to_string(rtime));
+    std::cout << "Thời gian FROM  : " << std::put_time(std::localtime(&from), "%d/%m/%Y %H:%M:%S") << '\n';
+    std::cout << "Thời gian TILL  : " << std::put_time(std::localtime(&till), "%d/%m/%Y %H:%M:%S") << '\n';
+    std::cout << "Thời gian RTIME : " << std::put_time(std::localtime(&rtime), "%d/%m/%Y %H:%M:%S") << '\n';
+    std::cout << "Thời gian NOW   : " << std::put_time(std::localtime(&t_now), "%d/%m/%Y %H:%M:%S") << '\n';
+
+    /*string checkTime = check_ticket_time(to_string(from), to_string(till), to_string(rtime));
     if (checkTime == "VALID") {
         cout << "Valid ticket date!" << endl << endl;
     }
-    if (checkTime == "RENEW") {
-        cout << "Need renew ticket date!" << endl << endl;
-        return "mismatch!";
-    }
-    if (checkTime == "INVALID") {
+    if (checkTime == "INVALID" || checkTime == "RENEW") {
         cout << "Invalid ticket date!" << endl << endl;
         return "mismatch!";
     }*/
@@ -215,6 +208,9 @@ string processServiceResponse(ServiceServerData& service, const string& decryptM
     else {
         string subKey = authenAuthenticatorAndGetSubkey(authen, service, client, ivAuth, sessionKey);
         if (subKey == "mismatch!") return "Invalid information in Authenticator!";
+        else if (!checkAPOptionsFromBitString(options)) {
+            encryptMessage = "Kerberos 5 authentication complete!";
+        }
         else {
             encryptMessage = encryptServerServiceData(service, subKey, iv, sessionKey) + "||" + iv;
         }
@@ -287,7 +283,9 @@ int main() {
     // Xử lý xác thực ticket + authenticator, tạo phản hồi
     string response = processServiceResponse(service, decryptMessage, client, ivTicket, ivAuth, priKeyV, iv);
 
-    cout << endl << "Encrypt mess: " << response << endl << endl;
+    size_t pos = response.find('|');
+    if (pos != std::string::npos) cout << endl << "Encrypt mess: " << response << endl << endl;
+    else cout << endl << "Message to client: " << response << endl << endl;
 
     // Gửi phản hồi
     send(clientSocket, response.c_str(), response.length(), 0);

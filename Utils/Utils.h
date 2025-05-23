@@ -16,6 +16,7 @@
 #include <chrono>
 #include <ctime>
 #include <random>
+#include <bitset>
 #include <soci/soci.h>
 #include <soci/odbc/soci-odbc.h>
 
@@ -223,4 +224,10 @@ std::string extractAfterFirstDoublePipe(std::string& input);
 std::string extractAfterSecondDoublePipe(std::string& input);
 
 //check Time
+std::string create_ticket_time(int ticket_lifetime, int renew_lifetime);
 std::string check_ticket_time(std::string from, std::string till, std::string rtime);
+
+//hàm tạo option bước 5
+uint32_t createAPOptions(bool useSessionKey, bool mutualRequired);
+std::string apOptionsToBitString(uint32_t options); //trả về chuỗi nhị phân
+bool checkAPOptionsFromBitString(const std::string& bitStr); //check option in step 5

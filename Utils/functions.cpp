@@ -1,5 +1,12 @@
 ﻿#include "./Utils.h"
 
+//Option step 5
+enum APOptions {
+    RESERVED = 1u << 31,       // Bit 0 (MSB)
+    USE_SESSION_KEY = 1u << 30,// Bit 1
+    MUTUAL_REQUIRED = 1u << 29 // Bit 2
+};
+
 const int BLOCK_SIZE = 16;
 const int Nk = 4;          // 8 words * 4 bytes = 32 bytes = 256 bits
 const int Nr = 10;         // 14 rounds cho AES-256
@@ -871,6 +878,23 @@ std::string extractAfterSecondDoublePipe(std::string& input) {
 }
 
 //check Time
+std::string create_ticket_time(int ticket_lifetime, int renew_lifetime) {
+    auto from_time = std::chrono::system_clock::now();
+    std::time_t from_c = std::chrono::system_clock::to_time_t(from_time);
+
+    // Till = From + ticket_lifetime tiếng (ticket có thể dùng trong ticket_lifetime tiếng)
+    auto till_time = std::chrono::system_clock::now() + std::chrono::hours(ticket_lifetime);
+    std::time_t till_c = std::chrono::system_clock::to_time_t(till_time);
+
+
+    // Rtime = Till + renew_lifetime tiếng (vé có thể gia hạn thêm renew_lifetime tiếng)
+    auto rtime_time = till_time + std::chrono::hours(renew_lifetime);
+    std::time_t rtime_c = std::chrono::system_clock::to_time_t(rtime_time);
+
+    // Ghép lại thành Times
+    return std::to_string(from_c) + "|" + std::to_string(till_c) + "|" + std::to_string(rtime_c);
+}
+
 std::string check_ticket_time(std::string from, std::string till, std::string rtime) {
     auto now = std::chrono::system_clock::now();
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
@@ -879,10 +903,40 @@ std::string check_ticket_time(std::string from, std::string till, std::string rt
     std::time_t till_c = static_cast<std::time_t>(std::stoll(till));
     std::time_t rtime_c = static_cast<std::time_t>(std::stoll(rtime));
 
-    if (now_c > from_c && now_c < till_c)
+    if (now_c >= from_c && now_c <= till_c)
         return "VALID";
     if (now_c > till_c && now_c < rtime_c)
         return "RENEW";
     else
         return "INVALID";
+}
+
+//hàm tạo option bước 5
+uint32_t createAPOptions(bool useSessionKey, bool mutualRequired) {
+    uint32_t options = 0;
+    if (useSessionKey)
+        options |= USE_SESSION_KEY;
+    if (mutualRequired)
+        options |= MUTUAL_REQUIRED;
+    return options;
+}
+std::string apOptionsToBitString(uint32_t options) {
+    std::bitset<32> bits(options);
+    return bits.to_string(); // trả về chuỗi nhị phân dạng "011000...000"
+}
+bool checkAPOptionsFromBitString(const std::string& bitStr) {
+    if (bitStr.length() != 32) {
+        std::cerr << "Lỗi: Chuỗi APOptions không hợp lệ. Phải có 32 bit.\n";
+        return false;
+    }
+
+    // Chuyển chuỗi nhị phân sang số uint32_t
+    std::bitset<32> bits(bitStr);
+    uint32_t options = static_cast<uint32_t>(bits.to_ulong());
+
+    // Kiểm tra cả 2 bit đều bật hay không
+    bool useSessionKey = (options & USE_SESSION_KEY) != 0;
+    bool mutualRequired = (options & MUTUAL_REQUIRED) != 0;
+
+    return (useSessionKey && mutualRequired);
 }

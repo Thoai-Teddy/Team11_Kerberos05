@@ -92,6 +92,10 @@ void processTGSResponse(
     vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
     string authenticator_en = bytesToHex(authenticator_en_vec);
     cout << "authenticator: " << authenticator << endl;
+
+    uint32_t apOptions = createAPOptions(true, true);
+    string OPTION = apOptionsToBitString(apOptions);
+
     // Tạo message gửi tới Server V
     string message = OPTION + "|" + ticketV + "||" + iv_ticketV + "|" + authenticator_en + "||" + iv;
 
