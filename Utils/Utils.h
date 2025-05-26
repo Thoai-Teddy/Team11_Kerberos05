@@ -61,10 +61,10 @@ public:
         const std::string& pub_key, const std::string& pri_key)
         : id(id), ad(ad), realm(realm), pub_key(pub_key), pri_key(pri_key) {}
 
-    std::string getID() const;       
-    std::string getAD() const;       
-    std::string getRealm() const;  
-    std::string getPublicKey() const; 
+    std::string getID() const;
+    std::string getAD() const;
+    std::string getRealm() const;
+    std::string getPublicKey() const;
     void setPrivateKey(std::string privateKey);
     void setID(const std::string& newID) { id = newID; }
     void setAD(const std::string& newAD) { ad = newAD; }
@@ -146,7 +146,7 @@ struct ServiceServerData {
         uint32_t seq, const std::string& kc)
         : clientID(client), encryptedData(encData), TS2(ts), subkey(subk), seqNum(seq), kcV(kc) {}
 };
-ServiceTicket createServiceTicket(const std::string& clientID, const std::string& flags, const std::string& sessionKey, const std::string& clientAD, 
+ServiceTicket createServiceTicket(const std::string& clientID, const std::string& flags, const std::string& sessionKey, const std::string& clientAD,
     const std::string& realmc, const std::chrono::system_clock::time_point& from, const std::chrono::system_clock::time_point& till,
     const std::chrono::system_clock::time_point& rtime);
 

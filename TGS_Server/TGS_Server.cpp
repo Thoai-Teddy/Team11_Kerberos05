@@ -34,6 +34,34 @@ std::string timeTostring(std::chrono::system_clock::time_point timePoint) {
     return std::to_string(timeT);
 }
 
+string decryptTicketV(const string& encryptTicket, const string& iv, const string& priKeyV) {
+    string response = "renew";
+
+    // Bước 1: Chuyển encryptTicket thành vector<unsigned char>
+    vector<unsigned char> cipherBytes = hexStringToVector(encryptTicket);
+
+    // Bước 2: Chuyển priKeyV và iv sang vector<unsigned char>
+    vector<unsigned char> key(priKeyV.begin(), priKeyV.end());
+    vector<unsigned char> ivBytes(iv.begin(), iv.end());
+
+    // Bước 3: Giải mã AES-CBC
+    vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key, ivBytes);
+
+    // Bước 4: Bỏ padding để lấy chuỗi gốc
+    string decryptedText = unpadString(decryptedBytes);
+
+    cout << endl << "DECRYPT TICKET V: " << decryptedText << endl << endl;
+
+    // Bước 5: Parse ServiceTicket
+    ServiceTicket ticket = parseServiceTicket(decryptedText);
+    if (!hasRenewableFlag(ticket.flags)) {
+        response = "This ticket can not renewable!";
+    }
+    else cout << endl << response << endl << endl;
+
+    return response;
+}
+
 
 
 string decryptAuthenticatorc(const string& Mess, const string& Kc_tgs, const string& iv_authen) {
@@ -156,7 +184,15 @@ int main() {
         //cout << "Response: " << txt << endl << endl;
 
         std::string options_from_client, ticket_v_from_client, iv_v_from_client;
+
+        cout << endl << "txt origin:" << txt << endl;
+
         extractOptionAndTicket(txt, options_from_client, ticket_v_from_client, iv_v_from_client);
+
+        cout << endl << "txt after: " << txt << endl << endl
+            << "ticket: " << ticket_v_from_client << endl
+            << "iv_v: " << iv_v_from_client << endl
+            << "K_v: " << K_v << endl;
 
         if (count != 0 && !isRenewOption(options_from_client)) {
             string response = "You have been issued a ticket!";
@@ -165,29 +201,8 @@ int main() {
             break;
         }
         if (isRenewOption(options_from_client) && !ticket_v_from_client.empty()) {  //giải mã ticketv và kiểm tra flag
-            // Bước 1: Chuyển encryptTicket thành vector<unsigned char>
-            vector<unsigned char> cipherBytes = hexStringToVector(ticket_v_from_client);
-
-            // Bước 2: Chuyển priKeyV và iv sang vector<unsigned char>
-            vector<unsigned char> key(K_c_v.begin(), K_c_v.end());
-            vector<unsigned char> ivBytes(iv_v_from_client.begin(), iv_v_from_client.end());
-
-            // Bước 3: Giải mã AES-CBC
-            vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key, ivBytes);
-
-            // Bước 4: Bỏ padding để lấy chuỗi gốc
-            string decryptedText = unpadString(decryptedBytes);
-
-            cout << "DECRYPT TICKET V FROM CLIENT: " << decryptedText << endl << endl;
-
-            // Bước 5: Parse ServiceTicket
-            ServiceTicket ticket_v_decrypt = parseServiceTicket(decryptedText);
-            if (!hasRenewableFlag(ticket_v_decrypt.flags)) {
-                string response = "This ticket can not renewable!";
-                cout << "Response from server: " << response << endl << endl;
-                send_message(clientSocket, response);
-                break;
-            }
+            string response = decryptTicketV(ticket_v_from_client, iv_v_from_client, K_v);
+            if(response != "renew") send_message(clientSocket, response);
         };
 
         while (iv_a.size() < BLOCK_SIZE) iv_a.push_back(0x00); // Bổ sung nếu thiếu
@@ -205,13 +220,13 @@ int main() {
             authenticatorc_from_client += client_request_vector[i];
             //cout << endl << "Authen: " << authenticatorc_from_client << endl << endl;
         }
-        cout << "Response: " << txt << endl << endl;
+        cout << endl << "Response: " << txt << endl << endl;
         cout << "Received Authenticatorc: " << authenticatorc_from_client << endl << endl;
 
 
 
         std::string now = get_current_time_formatted();
-        if (now < times_from_from_client || now > times_till_from_client)
+        if (now > times_rtime_from_client)
         {
             string error = "Cannot create V ticket!Ticket has expired!";
             cout << error << endl << endl;
@@ -303,15 +318,24 @@ int main() {
         */
 
         //Mã hóa
+        uint32_t flag;
+        flag = RENEWABLE;
         ServiceTicket Ticket_V;
-        Ticket_V.flags = options_from_client;
+        Ticket_V.flags = apOptionsToBitString(flag);
         Ticket_V.sessionKey = K_c_v;
         Ticket_V.realmc = TGS_ticket.realmc;
         Ticket_V.clientID = TGS_ticket.clientID;
         Ticket_V.clientAD = TGS_ticket.clientAD;
-        Ticket_V.timeInfo.from = std::chrono::system_clock::now();
-        Ticket_V.timeInfo.till = Ticket_V.timeInfo.from + std::chrono::hours(8);
-        Ticket_V.timeInfo.rtime = Ticket_V.timeInfo.till + std::chrono::hours(24);
+        if (count == 0) {
+            Ticket_V.timeInfo.from = std::chrono::system_clock::now() - std::chrono::hours(9);
+            Ticket_V.timeInfo.till = Ticket_V.timeInfo.from + std::chrono::hours(8);
+            Ticket_V.timeInfo.rtime = Ticket_V.timeInfo.till + std::chrono::hours(24);
+        }
+        else {
+            Ticket_V.timeInfo.from = std::chrono::system_clock::now();
+            Ticket_V.timeInfo.till = Ticket_V.timeInfo.from + std::chrono::hours(8);
+            Ticket_V.timeInfo.rtime = Ticket_V.timeInfo.till + std::chrono::hours(24);
+        }
 
         std::string Ticket_V_plaintext = buildServiceTicketPlaintext(Ticket_V.flags, Ticket_V.sessionKey, Ticket_V.realmc, Ticket_V.clientID, Ticket_V.clientAD,
             time_point_to_uint64(Ticket_V.timeInfo.from), time_point_to_uint64(Ticket_V.timeInfo.till), time_point_to_uint64(Ticket_V.timeInfo.rtime));
@@ -395,7 +419,7 @@ int main() {
         string serviceTicket = "ServiceTicket_for_" + string(buffer);
         send(clientSocket, serviceTicket.c_str(), serviceTicket.length(), 0);
         count++;
-    }while (true);
+    } while (true);
 
     closesocket(clientSocket);
     closesocket(tgsSocket);

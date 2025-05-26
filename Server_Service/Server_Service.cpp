@@ -137,31 +137,14 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, Servi
     std::cout << "Thời gian TILL  : " << till_str << '\n';
     std::cout << "Thời gian TS2  : " << ts2_str << '\n';
 
-    /*if (ts2_str < from_str || ts2_str > till_str) {
-        string err = "TS2 is outside the ticket validity period (string compare).";
-        cout << err << endl << endl;
-        return err;
+    if (ts2_time < from || ts2_time > till) {
+        sucess = false;
+        std::cerr << "[ERROR] TS2 invalid!\n";
+        return "mismatch!";
     }
     else {
-        cout << "TS2 is valid." << endl << endl;
-    }*/
-
-    /*if (isTS2Valid(auth.TS2, from, till, rtime)) cout << "TS2 is valid." << endl << endl;
-    else {
-        sucess = false;
-        string mess = "TS2 is invalid!";
-        cout << mess << endl << endl;
-        return mess;
-    }*/
-    /*if (now < auth.TS2) {
-        return "Timestamp is too early!";
-    }*/
-
-    /*if (abs(diff) > allowedSkewSeconds) {
-        sucess = false;
-        cout << "Invalid time in Authen!" << endl << endl;
-        return "mismatch!";
-    }*/
+        std::cout << "[OK] TS2 valid.\n";
+    }
 
     if (sucess) {
         service.TS2 = auth.TS2;
