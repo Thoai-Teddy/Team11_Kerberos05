@@ -509,9 +509,19 @@ int main() {
         }
 
         //kiểm tra thời hạn vé
-        std::cout << "From time (epoch): " << from_time_from_tgs << std::endl;
-        std::cout << "Till time (epoch): " << till_time_from_tgs << std::endl;
-        std::cout << "Rtime time (epoch): " << rtime_time_from_tgs << std::endl;
+        std::chrono::system_clock::time_point from = secondTimestampToTimePoint(from_time_from_tgs);
+        std::chrono::system_clock::time_point till = secondTimestampToTimePoint(till_time_from_tgs);
+        std::chrono::system_clock::time_point rtime = secondTimestampToTimePoint(rtime_time_from_tgs);
+        time_t from_t = chrono::system_clock::to_time_t(from);
+        time_t till_t = chrono::system_clock::to_time_t(till);
+        time_t rtime_t = std::chrono::system_clock::to_time_t(rtime);
+
+        std::string rtime_str = timeToString(rtime_t);
+        std::string from_str = timeToString(from_t);
+        std::string till_str = timeToString(till_t);
+        std::cout << "Thời gian FROM  : " << from_str << '\n';
+        std::cout << "Thời gian TILL  : " << till_str << '\n';
+        std::cout << "Thời gian RTIME  : " << rtime_str << '\n';
 
         string checkT = check_ticket_time(from_time_from_tgs, till_time_from_tgs, rtime_time_from_tgs);
         if (checkT == "RENEW") {

@@ -2,13 +2,6 @@
 
 const int BLOCK_SIZE = 16;
 
-std::string timeToString(time_t t) {
-    std::tm* tm_ptr = std::localtime(&t);
-    char buffer[20];
-    std::strftime(buffer, sizeof(buffer), "%Y/%m/%d %H:%M:%S", tm_ptr);
-    return std::string(buffer);
-}
-
 string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, const string& iv, const string& priKeyV, ServiceTicket& ticket) {
     // Bước 1: Chuyển encryptTicket thành vector<unsigned char>
     vector<unsigned char> cipherBytes = hexStringToVector(encryptTicket);
@@ -85,10 +78,10 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     time_t rtime = chrono::system_clock::to_time_t(ticket.timeInfo.rtime);
     time_t t_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-    std::cout << "Thời gian FROM  : " << std::put_time(std::localtime(&from), "%d/%m/%Y %H:%M:%S") << '\n';
-    std::cout << "Thời gian TILL  : " << std::put_time(std::localtime(&till), "%d/%m/%Y %H:%M:%S") << '\n';
-    std::cout << "Thời gian RTIME : " << std::put_time(std::localtime(&rtime), "%d/%m/%Y %H:%M:%S") << '\n';
-    std::cout << "Thời gian NOW   : " << std::put_time(std::localtime(&t_now), "%d/%m/%Y %H:%M:%S") << '\n';
+    std::cout << "Thời gian FROM  : " << std::put_time(std::localtime(&from), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Thời gian TILL  : " << std::put_time(std::localtime(&till), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Thời gian RTIME : " << std::put_time(std::localtime(&rtime), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Thời gian NOW   : " << std::put_time(std::localtime(&t_now), "%Y/%m/%d %H:%M:%S") << '\n';
 
     string checkTime = check_ticket_time(to_string(from), to_string(till), to_string(rtime));
     if (checkTime == "VALID") {

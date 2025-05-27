@@ -258,3 +258,5 @@ bool hasRenewableFlag(const string& bitString);
 bool isRenewOption(const std::string& bitString);
 //hàm tách option và ticket cần renew
 void extractOptionAndTicket(string& input, string& option, string& ticket, string& iv_v);
+
+std::string timeToString(time_t t);

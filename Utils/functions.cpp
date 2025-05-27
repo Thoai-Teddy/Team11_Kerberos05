@@ -1007,3 +1007,10 @@ void extractOptionAndTicket(string& input, string& option, string& ticket, strin
         input = input.substr(next_pipe + 1);
     }
 }
+
+std::string timeToString(time_t t) {
+    std::tm* tm_ptr = std::localtime(&t);
+    char buffer[20];
+    std::strftime(buffer, sizeof(buffer), "%Y/%m/%d %H:%M:%S", tm_ptr);
+    return std::string(buffer);
+}
