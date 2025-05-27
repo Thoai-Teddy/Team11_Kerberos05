@@ -19,6 +19,8 @@
 #include <bitset>
 #include <soci/soci.h>
 #include <soci/odbc/soci-odbc.h>
+#include <bitset>
+
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -215,12 +217,19 @@ std::string buildServiceTicketPlaintext(const std::string& flag,
 struct Ticket {
     std::string clientID;        // Thông tin định danh Client
     std::string flags;           // Các cờ (flags)
-    std::string sessionKey;      // Khóa phiên giữa Client và Server V
+    std::string sessionKey;      // Khóa phiên
     std::string clientAD;        // Thông tin định danh Client
     std::string realmc;
     std::string times_from;
     std::string times_till;
     std::string times_rtime;
+
+    Ticket() {};
+
+    Ticket(const std::string& clientID, const std::string& flags, const std::string& sessionKey, const std::string& clientAD, const std::string& realmc,
+        const std::string& times_from, const std::string& times_till, const std::string& times_rtime) :
+        clientID(clientID), flags(flags), sessionKey(sessionKey), clientAD(clientAD),
+        realmc(realmc), times_from(times_from), times_till(times_till), times_rtime(times_rtime) {};
 };
 
 
@@ -231,6 +240,8 @@ std::string generate_nonce(int length);
 std::string get_current_time_formatted();
 
 std::string build_times(int ticket_lifetime, int renew_lifetime);
+
+void set_rec_time_out(SOCKET sock, int milliseconds);
 
 void send_message(SOCKET sock, const std::string& message);
 
@@ -256,7 +267,11 @@ bool checkAPOptionsFromBitString(const std::string& bitStr); //check option in s
 bool hasRenewableFlag(const string& bitString);
 //kiểm tra nếu Option là RENEW
 bool isRenewOption(const std::string& bitString);
+
 //hàm tách option và ticket cần renew
 void extractOptionAndTicket(string& input, string& option, string& ticket, string& iv_v);
-
 std::string timeToString(time_t t);
+
+// Tạo options cho bước 1
+uint32_t createOptions(bool initial, bool renew);
+

@@ -85,6 +85,11 @@ std::string info::getPublicKey() const {
     return pub_key;
 };
 
+std::string info::getPrivateKey() const {
+    return pri_key;
+};
+
+
 void info::setPrivateKey(std::string privateKey) {
     this->pri_key = privateKey;
 }
@@ -810,20 +815,72 @@ std::string build_times(int ticket_lifetime, int renew_lifetime) {
     return from + "|" + till + "|" + rtime;
 }
 
+
 void send_message(SOCKET sock, const std::string& message)
 {
     send(sock, message.c_str(), message.size(), 0);
 }
 
+void set_rec_time_out(SOCKET sock, int milliseconds) {
+    DWORD timeout = milliseconds;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) < 0) {
+        throw std::runtime_error("Failed to set receive timeout.");
+    }
+}
+
 std::string receive_message(SOCKET sock) {
     char buffer[4096];
     int bytesReceived = recv(sock, buffer, sizeof(buffer), 0);
+
+    if (bytesReceived == 0) {
+        throw std::runtime_error("Connection close by the peer.");
+    }
+
     if (bytesReceived == SOCKET_ERROR) {
-        throw std::runtime_error("Receive failed");
+        int errorCode = WSAGetLastError();
+        if (errorCode == WSAETIMEDOUT) {
+            throw std::runtime_error("Receive timeout occurred.");
+        }
+        else {
+            throw std::runtime_error("Receive failed with error code - " + std::to_string(errorCode));
+        }
     }
     return std::string(buffer, bytesReceived);
 }
 
+/*
+std::string receive_message(SOCKET sock) {
+    char buffer[4096];
+    int bytesReceived = recv(sock, buffer, sizeof(buffer), 0);
+    if (bytesReceived == SOCKET_ERROR) {
+        //throw std::runtime_error("Receive failed");
+        std::cout << "RECEIVE MESSAGE FAILED!" << std::endl;
+        return "RECEIVE MESSAGE FAILED!";
+    }
+    return std::string(buffer, bytesReceived);
+}
+*/
+
+/*
+void send_message(SOCKET sock, const std::string& message)
+{
+    std::string msg = message + "\n";
+    send(sock, msg.c_str(), msg.size(), 0);
+}
+
+std::string receive_message(SOCKET sock) {
+    std::string result;
+    char ch;
+    int bytesReceived;
+    while (true) {
+        bytesReceived = recv(sock, &ch, 1, 0);
+        if (bytesReceived <= 0) break; // Lỗi hoặc đóng kết nối
+        if (ch == '\n') break;         // Kết thúc message
+        result += ch;
+    }
+    return result;
+}
+*/
 
 // Hàm tạo chuỗi 16 ký tự ngẫu nhiên (dùng để tạo key và iv)
 std::string generateRandomString(size_t length) {
@@ -862,6 +919,7 @@ std::string extractAfterFirstDoublePipe(std::string& input) {
 
     return result;
 }
+
 std::string extractAfterSecondDoublePipe(std::string& input) {
     size_t last = input.rfind("||");
     if (last == std::string::npos)
@@ -882,12 +940,12 @@ std::string create_ticket_time(int ticket_lifetime, int renew_lifetime) {
     std::time_t from_c = std::chrono::system_clock::to_time_t(from_time);
 
     // Till = From + ticket_lifetime tiếng (ticket có thể dùng trong ticket_lifetime tiếng)
-    auto till_time = std::chrono::system_clock::now() + std::chrono::hours(ticket_lifetime);
+    auto till_time = std::chrono::system_clock::now() + std::chrono::minutes(ticket_lifetime);
     std::time_t till_c = std::chrono::system_clock::to_time_t(till_time);
 
 
     // Rtime = Till + renew_lifetime tiếng (vé có thể gia hạn thêm renew_lifetime tiếng)
-    auto rtime_time = till_time + std::chrono::hours(renew_lifetime);
+    auto rtime_time = till_time + std::chrono::minutes(renew_lifetime);
     std::time_t rtime_c = std::chrono::system_clock::to_time_t(rtime_time);
 
     // Ghép lại thành Times
@@ -904,7 +962,7 @@ std::string check_ticket_time(std::string from, std::string till, std::string rt
 
     if (now_c >= from_c && now_c <= till_c)
         return "VALID";
-    if (now_c > till_c && now_c < rtime_c)
+    else if (now_c >= till_c && now_c <= rtime_c)
         return "RENEW";
     else
         return "INVALID";
@@ -919,10 +977,12 @@ uint32_t createAPOptions(bool useSessionKey, bool mutualRequired) {
         options |= MUTUAL_REQUIRED;
     return options;
 }
+
 std::string apOptionsToBitString(uint32_t options) {
     std::bitset<32> bits(options);
     return bits.to_string(); // trả về chuỗi nhị phân dạng "011000...000"
 }
+
 bool checkAPOptionsFromBitString(const std::string& bitStr) {
     if (bitStr.length() != 32) {
         std::cerr << "Lỗi: Chuỗi APOptions không hợp lệ. Phải có 32 bit.\n";
@@ -1013,4 +1073,13 @@ std::string timeToString(time_t t) {
     char buffer[20];
     std::strftime(buffer, sizeof(buffer), "%Y/%m/%d %H:%M:%S", tm_ptr);
     return std::string(buffer);
+  
+// Tạo option cho bước 1
+uint32_t createOptions(bool initial, bool renew) {
+    uint32_t options = 0;
+    if (initial)
+        options |= OP_INITIAL; //OR
+    if (renew)
+        options |= RENEW;
+    return options;
 }
