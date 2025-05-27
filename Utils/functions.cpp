@@ -1,12 +1,5 @@
 ﻿#include "./Utils.h"
 
-//Option step 5
-enum APOptions {
-    RESERVED = 1u << 31,       // Bit 0 (MSB)
-    USE_SESSION_KEY = 1u << 30,// Bit 1
-    MUTUAL_REQUIRED = 1u << 29 // Bit 2
-};
-
 const int BLOCK_SIZE = 16;
 const int Nk = 4;          // 8 words * 4 bytes = 32 bytes = 256 bits
 const int Nr = 10;         // 14 rounds cho AES-256
@@ -618,7 +611,7 @@ ServiceTicket createServiceTicket(const std::string& clientID, const std::string
 
 // Lấy thời gian hiện tại
 std::chrono::system_clock::time_point createTS2() {
-    return std::chrono::system_clock::now();  
+    return std::chrono::system_clock::now();
 }
 std::string timeToString(std::chrono::system_clock::time_point timePoint) {
     std::time_t timeT = std::chrono::system_clock::to_time_t(timePoint);
@@ -648,6 +641,12 @@ chrono::system_clock::time_point millisecTimestampToTimePoint(const string& time
     return chrono::system_clock::time_point(dur);
 }
 
+chrono::system_clock::time_point secondTimestampToTimePoint(const string& ts_str) {
+    uint64_t ts = std::stoull(ts_str);
+    return std::chrono::system_clock::from_time_t(static_cast<time_t>(ts));
+}
+
+
 //Hàm lưu thông tin Ticket sau khi giải mã:
 ServiceTicket parseServiceTicket(const string& decryptedText) {
     // Giả sử format: flags | sessionKey | realmc | clientID | clientAD | from | till | rtime
@@ -673,9 +672,9 @@ ServiceTicket parseServiceTicket(const string& decryptedText) {
     ticket.realmc = fields[2];
     ticket.clientID = fields[3];
     ticket.clientAD = fields[4];
-    ticket.timeInfo.from = millisecTimestampToTimePoint(fields[5]);
-    ticket.timeInfo.till = millisecTimestampToTimePoint(fields[6]);
-    ticket.timeInfo.rtime = millisecTimestampToTimePoint(fields[7]);
+    ticket.timeInfo.from = secondTimestampToTimePoint(fields[5]);
+    ticket.timeInfo.till = secondTimestampToTimePoint(fields[6]);
+    ticket.timeInfo.rtime = secondTimestampToTimePoint(fields[7]);
 
     return ticket;
 }
@@ -719,7 +718,7 @@ AuthenticatorC parseAuthenticator(const string& decryptedText) {
     AuthenticatorC auth;
     auth.clientID = fields[0];
     auth.realmc = fields[1];
-    auth.TS2 = millisecTimestampToTimePoint(fields[2]);
+    auth.TS2 = secondTimestampToTimePoint(fields[2]);
     auth.subkey = fields[3];
     auth.seqNum = stoi(fields[4]);  // Chuyển seqNum thành số
 
@@ -775,7 +774,7 @@ std::string buildServiceTicketPlaintext(const std::string& flag,
 
 std::string generate_nonce(int length) {
     std::random_device rd;
-    std::mt19937 gen(rd()); 
+    std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, 255);
 
     std::stringstream nonce;
@@ -1022,6 +1021,59 @@ bool isRenewOption(const std::string& bitString) {
     return bitString[30] == '1';
 }
 
+//hàm tách option và ticket cần renew
+void extractOptionAndTicket(string& input, string& option, string& ticket, string& iv_v) {
+    size_t first_double_pipe = input.find("##");
+
+    if (first_double_pipe == string::npos) {
+        // Không có dấu '##'
+        size_t pos_pipe = input.find('|');
+        option = (pos_pipe == string::npos) ? input : input.substr(0, pos_pipe);
+        ticket = "";
+        iv_v = "";
+        input = (pos_pipe == string::npos) ? "" : input.substr(pos_pipe + 1);
+        return;
+    }
+
+    size_t second_double_pipe = input.find("##", first_double_pipe + 2);
+    if (second_double_pipe == string::npos) {
+        // Chỉ có 1 dấu '##'
+        option = input.substr(0, first_double_pipe);
+        size_t next_pipe = input.find('|', first_double_pipe + 2);
+        if (next_pipe == string::npos) {
+            ticket = input.substr(first_double_pipe + 2);
+            iv_v = "";
+            input = "";
+        }
+        else {
+            ticket = input.substr(first_double_pipe + 2, next_pipe - (first_double_pipe + 2));
+            iv_v = "";
+            input = input.substr(next_pipe + 1);
+        }
+        return;
+    }
+
+    // Có đủ 2 dấu ||
+    option = input.substr(0, first_double_pipe);
+    ticket = input.substr(first_double_pipe + 2, second_double_pipe - (first_double_pipe + 2));
+
+    size_t next_pipe = input.find('|', second_double_pipe + 2);
+    if (next_pipe == string::npos) {
+        iv_v = input.substr(second_double_pipe + 2);
+        input = "";
+    }
+    else {
+        iv_v = input.substr(second_double_pipe + 2, next_pipe - (second_double_pipe + 2));
+        input = input.substr(next_pipe + 1);
+    }
+}
+
+std::string timeToString(time_t t) {
+    std::tm* tm_ptr = std::localtime(&t);
+    char buffer[20];
+    std::strftime(buffer, sizeof(buffer), "%Y/%m/%d %H:%M:%S", tm_ptr);
+    return std::string(buffer);
+  
 // Tạo option cho bước 1
 uint32_t createOptions(bool initial, bool renew) {
     uint32_t options = 0;

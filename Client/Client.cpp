@@ -35,7 +35,7 @@ void sendToServer(SOCKET clientSocket, const string& message) {
 
 
 string createAuthenticator(const info& clientInfo, const string& subkey) {
-    
+
     // Tạo đối tượng AuthenticatorC
     AuthenticatorC authenticator;
     authenticator.clientID = clientInfo.getID();  // ID của Client
@@ -45,7 +45,7 @@ string createAuthenticator(const info& clientInfo, const string& subkey) {
     authenticator.seqNum = 1;         // Số thứ tự (có thể dùng cơ chế tăng dần cho mỗi lần gửi yêu cầu)
 
     // Chuyển đổi thời gian TS2 thành chuỗi (ví dụ sử dụng thời gian Unix timestamp)
-    auto timestamp = chrono::duration_cast<chrono::seconds>(authenticator.TS2.time_since_epoch()).count();
+    std::time_t timestamp = std::chrono::system_clock::to_time_t(authenticator.TS2);
 
     // Tạo chuỗi kết quả theo định dạng "clientID|realm|TS2|subkey|seqNum"
     return authenticator.clientID + "|" +
@@ -54,6 +54,23 @@ string createAuthenticator(const info& clientInfo, const string& subkey) {
         authenticator.subkey + "|" +
         to_string(authenticator.seqNum);
 }
+
+string timePointToString(const chrono::system_clock::time_point& tp) {
+    time_t time = chrono::system_clock::to_time_t(tp);
+    tm* tm = localtime(&time);  // Chuyển đổi thành tm cấu trúc
+    ostringstream oss;
+
+    // Tạo chuỗi thời gian theo định dạng YYYY-MM-DD HH:MM:SS
+    oss << (tm->tm_year + 1900) << "-"
+        << (tm->tm_mon + 1) << "-"
+        << tm->tm_mday << " "
+        << tm->tm_hour << ":"
+        << tm->tm_min << ":"
+        << tm->tm_sec;
+
+    return oss.str();
+}
+
 
 
 void processTGSResponse(
@@ -82,8 +99,12 @@ void processTGSResponse(
     //    throw invalid_argument("Ticket has expired");
     //}
 
+    auto TS2_c_v = chrono::system_clock::now();  // Giả sử TS2 là time_point hiện tại
+    string TS2_c_v_str = timePointToString(TS2_c_v);  // Chuyển TS2 thành chuỗi
+    string subkey = createSubkey(kcv, TS2_c_v_str);
+
     // Tạo AuthenticatorC: E(Kcv, [IDC || RealmC || TS2 || Subkey || Seq#])
-    string authenticator = createAuthenticator(clientInfo, kcv);
+    string authenticator = createAuthenticator(clientInfo, subkey);
     vector<unsigned char> authenticator_vec = padString(authenticator);
 
     // Chuẩn bị key và IV
@@ -105,23 +126,6 @@ void processTGSResponse(
     sendToServer(clientSocket, message);
 }
 
-
-
-string timePointToString(const chrono::system_clock::time_point& tp) {
-    time_t time = chrono::system_clock::to_time_t(tp);
-    tm* tm = localtime(&time);  // Chuyển đổi thành tm cấu trúc
-    ostringstream oss;
-
-    // Tạo chuỗi thời gian theo định dạng YYYY-MM-DD HH:MM:SS
-    oss << (tm->tm_year + 1900) << "-"
-        << (tm->tm_mon + 1) << "-"
-        << tm->tm_mday << " "
-        << tm->tm_hour << ":"
-        << tm->tm_min << ":"
-        << tm->tm_sec;
-
-    return oss.str();
-}
 
 string decryptMessFromV(const string& encryptMess, const string& Kcv, const string& iv_str) {
     vector<unsigned char> cipherBytes = hexStringToVector(encryptMess);
@@ -332,7 +336,6 @@ int main() {
     }
     std::cout << "Response From AS About TGT: " << response_from_as << std::endl << std::endl;
 
-
     if (response_from_as == "WRONG ID!") {
         std::cout << "Error: Wrong id!" << std::endl;
         closesocket(clientSocket);
@@ -406,13 +409,7 @@ int main() {
 
     // Đóng kết nối với AS Server
     closesocket(clientSocket);
-    WSACleanup();
-
-    return 0;
-}
-
-/*
-
+    
     // Kết nối tới TGS Server
     //Cấu hình
     info serverV("IDServerV", "RealmServerV");
@@ -421,7 +418,7 @@ int main() {
     serverAddr.sin_port = htons(8801); // Kết nối tới cổng 8801 của TGS Server
 
     if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        cout << "Connection to TGS failed." << endl;
+        cerr << "Connection to TGS failed." << endl;
         closesocket(clientSocket);
         WSACleanup();
         return 1;
@@ -429,7 +426,7 @@ int main() {
     // Gửi thông tin tới TGS Server theo dạng "Options|ID_V|Times|Nonce2|Ticket_TGS|Authenticatorc|iv_authen"
     //string Options = "auth";
     string Ticket_TGS = ticket_tgs_from_as;
-    times = build_times(8, 24);
+    Times = build_times(8, 24);
     string Nonce2 = generate_nonce(8); // Random 8 bytes
     auto TS2 = chrono::system_clock::now();  // Giả sử TS2 là time_point hiện tại
     string TS2_str = timePointToString(TS2);  // Chuyển TS2 thành chuỗi
@@ -437,97 +434,180 @@ int main() {
     string Authenticatorc = createAuthenticator(client, subkey);
 
     //Mã hóa Authenticatorc 
-    string iv_authen = generateRandomString();
-    cout << "iv_authen: " << iv_authen << endl << endl;
-    string encrypted_authenticator = encryptAuthenticatorc(Authenticatorc, K_c_tgs, iv_authen);
-    string message_to_tgs = options + "|" + serverV.getID() + "|" + times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_for_tgs_ticket + "|" + encrypted_authenticator + "||" + iv_authen;
-    cout << "Sending message to TGS: " << message_to_tgs << endl << endl;
+    string realm_c_from_tgs, id_c_from_tgs, ticket_v_from_tgs, ciphertext_hex_from_tgs;
+    string K_c_v, from_time_from_tgs, till_time_from_tgs, rtime_time_from_tgs, nonce2_from_tgs, realm_v_from_tgs, id_v_from_tgs;
+    string message_to_tgs;
+    int bytesReceived;
+    string iv_ticket_v;
+
+    uint32_t Option;
+    bool renewable;
+    int count = 0;
+    do {
+        renewable = false;
+        string iv_authen = generateRandomString();
+        cout << "iv_authen: " << iv_authen << endl << endl;
+        string encrypted_authenticator = encryptAuthenticatorc(Authenticatorc, K_c_tgs, iv_authen);
+        if (count == 0) {
+            Option = OP_NONE;
+
+            message_to_tgs = apOptionsToBitString(Option) + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + encrypted_authenticator + "||" + iv_authen;
+            cout << "Sending message to TGS: " << message_to_tgs << endl << endl;
+        }
+        else {
+            Option = RENEW;
+            message_to_tgs = apOptionsToBitString(Option) + "##" + ticket_v_from_tgs + "##" + iv_ticket_v + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + encrypted_authenticator + "||" + iv_authen;
+            cout << "Sending message to TGS " << "(" << count << " times) : " << message_to_tgs << endl << endl;
+        }
+
+        send_message(clientSocket, message_to_tgs);
+
+        bytesReceived = 0;
+
+        // Nhận Service Ticket từ TGS Server
+        memset(buffer, 0, sizeof(buffer)); // Clear buffer
+        bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+        if (bytesReceived > 0) {
+            cout << "Received Service Ticket: " << buffer << endl << endl;
+        }
+
+        string trueRes(buffer);
+
+        // Đặt timeout cho socket - 5 phút (300 giây)
+        struct timeval timeout;
+        timeout.tv_sec = 300;   // 300 giây = 5 phút
+        timeout.tv_usec = 0;    // microseconds
+
+        setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+
+        // Nhận Service Ticket từ TGS Server
+        memset(buffer, 0, sizeof(buffer)); // Clear buffer
+        string clear(buffer);
+        cout << "Clear buffer: " << endl << endl;
+        bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+
+        if (bytesReceived == SOCKET_ERROR) {
+            int err = WSAGetLastError();
+            if (err == WSAETIMEDOUT) {
+                std::cerr << "Timeout: Không nhận được phản hồi từ TGS Server trong 5 phút." << std::endl;
+            }
+            else {
+                std::cerr << "Recv lỗi từ TGS Server, mã lỗi: " << err << std::endl;
+            }
+            closesocket(clientSocket);
+            WSACleanup();
+            return -1;
+        }
+        else if (bytesReceived == 0) {
+            std::cerr << "Kết nối bị đóng bởi TGS Server." << std::endl;
+            closesocket(clientSocket);
+            WSACleanup();
+            return -1;
+        }
+        else {
+            std::cout << "Received Service Ticket: " << buffer << std::endl << std::endl;
+        }
 
 
-    send_message(clientSocket, message_to_tgs);
+        // Tách dữ liệu mà server trả về
+        //string response_tgs(buffer);
+        string response_tgs = trueRes;
+        cout << "Response From TGS:" << response_tgs << endl << endl;
+        // Tách iv để giải mã plaintext
+        //string iv_pre_v = "ImAloneAndAboutY";
+        string iv_pre_v = "";
+        try {
+            iv_pre_v = extractAfterSecondDoublePipe(response_tgs);
+            cout << "iv_pre_v: " << iv_pre_v << endl;
+        }
+        catch (const exception& ex) {
+            cerr << "Error: " << ex.what() << endl << endl;
+        }
+        if (iv_pre_v.size() > BLOCK_SIZE) {
+            iv_pre_v = iv_pre_v.substr(0, BLOCK_SIZE);
+        }
+        vector<unsigned char> iv_v(iv_pre_v.begin(), iv_pre_v.end());
 
-    int bytesReceived = 0;
+        while (iv_v.size() < BLOCK_SIZE) iv_v.push_back(0x00); // Bổ sung nếu thiếu
 
-    // Nhận Service Ticket từ TGS Server
-    memset(buffer, 0, sizeof(buffer)); // Clear buffer
-    bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-    if (bytesReceived > 0) {
-        cout << "Received Service Ticket: " << buffer << endl << endl;
-    }
+        //Tách iv TicketV
+        iv_ticket_v = "";
+        try {
+            iv_ticket_v = extractAfterFirstDoublePipe(response_tgs);
+        }
+        catch (const exception& ex) {
+            cerr << "Error: " << ex.what() << endl << endl;
+        }
 
-    // Tách dữ liệu mà server trả về
-    string response_tgs(buffer);
-    // Tách iv để giải mã plaintext
-    //string iv_pre_v = "ImAloneAndAboutY";
-    string iv_pre_v = "";
-    try {
-        iv_pre_v = extractAfterSecondDoublePipe(response_tgs);
-        cout << "iv_pre_v: " << iv_pre_v << endl;
-    }
-    catch (const exception& ex) {
-        cout << "Error: " << ex.what() << endl << endl;
-    }
-    if (iv_pre_v.size() > BLOCK_SIZE) {
-        iv_pre_v = iv_pre_v.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> iv_v(iv_pre_v.begin(), iv_pre_v.end());
+        vector <string> response_tgs_part = splitString(response_tgs, "|");
 
-    while (iv_v.size() < BLOCK_SIZE) iv_v.push_back(0x00); // Bổ sung nếu thiếu
+        if (response_tgs_part.size() < 4)
+        {
+            cout << "Error: Response from TGS Server is invalid!" << endl << endl;
+            closesocket(clientSocket);
+            WSACleanup();
+            return -1;
+        }
 
-    //Tách iv TicketV
-    string iv_ticket_v = "";
-    try {
-        iv_ticket_v = extractAfterFirstDoublePipe(response_tgs);
-    }
-    catch (const exception& ex) {
-        cout << "Error: " << ex.what() << endl << endl;
-    }
+        realm_c_from_tgs = response_tgs_part[0];
+        id_c_from_tgs = response_tgs_part[1];
+        ticket_v_from_tgs = response_tgs_part[2];
+        ciphertext_hex_from_tgs = response_tgs_part[3];
 
-    vector <string> response_tgs_part = splitString(response_tgs, "|");
-
-    if (response_tgs_part.size() < 4)
-    {
-        cout << "Error: Response from AS Server is invalid!" << endl << endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return -1;
-    }
-
-    string realm_c_from_tgs = response_tgs_part[0];
-    string id_c_from_tgs = response_tgs_part[1];
-    string ticket_v_from_tgs = response_tgs_part[2];
-    string ciphertext_hex_from_tgs = response_tgs_part[3];
-
-    vector<unsigned char> ciphertext_block_from_tgs = hexStringToVector(ciphertext_hex_from_tgs);
+        vector<unsigned char> ciphertext_block_from_tgs = hexStringToVector(ciphertext_hex_from_tgs);
 
 
-    // Giải mã
-    if (K_c_tgs.size() > BLOCK_SIZE) {
-        K_c_tgs = K_c_tgs.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> Key_c_tgs(K_c_tgs.begin(), K_c_tgs.end());
+        // Giải mã
+        if (K_c_tgs.size() > BLOCK_SIZE) {
+            K_c_tgs = K_c_tgs.substr(0, BLOCK_SIZE);
+        }
+        vector<unsigned char> Key_c_tgs(K_c_tgs.begin(), K_c_tgs.end());
 
-    while (Key_c_tgs.size() < BLOCK_SIZE) Key_c_tgs.push_back(0x00); // Bổ sung nếu thiếu
+        while (Key_c_tgs.size() < BLOCK_SIZE) Key_c_tgs.push_back(0x00); // Bổ sung nếu thiếu
 
-    vector<unsigned char> plaintext_block_from_tgs = aes_cbc_decrypt(ciphertext_block_from_tgs, Key_c_tgs, iv_v);
-    string plaintext_from_tgs = unpadString(plaintext_block_from_tgs);
-    cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_tgs << endl << endl;
+        vector<unsigned char> plaintext_block_from_tgs = aes_cbc_decrypt(ciphertext_block_from_tgs, Key_c_tgs, iv_v);
+        string plaintext_from_tgs = unpadString(plaintext_block_from_tgs);
+        cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_tgs << endl << endl;
 
-    vector <string> parts_plaintext_from_tgs = splitString(plaintext_from_tgs, "|");
+        vector <string> parts_plaintext_from_tgs = splitString(plaintext_from_tgs, "|");
 
-    string K_c_v = parts_plaintext_from_tgs[0];
-    string from_time_from_tgs = parts_plaintext_from_tgs[1];
-    string till_time_from_tgs = parts_plaintext_from_tgs[2];
-    string rtime_time_from_tgs = parts_plaintext_from_tgs[3];
-    string nonce2_from_tgs = parts_plaintext_from_tgs[4];
-    string realm_v_from_tgs = parts_plaintext_from_tgs[5];
-    string id_v_from_tgs = parts_plaintext_from_tgs[6];
+        K_c_v = parts_plaintext_from_tgs[0];
+        from_time_from_tgs = parts_plaintext_from_tgs[1];
+        till_time_from_tgs = parts_plaintext_from_tgs[2];
+        rtime_time_from_tgs = parts_plaintext_from_tgs[3];
+        nonce2_from_tgs = parts_plaintext_from_tgs[4];
+        realm_v_from_tgs = parts_plaintext_from_tgs[5];
+        id_v_from_tgs = parts_plaintext_from_tgs[6];
 
 
 
-    if (nonce2_from_tgs != Nonce2) {
-        cout << "WARNING! DIFFERENT NONCE! THIS MAY BE A REPLAY ATTACK!" << endl << endl;
-    }
+        if (nonce2_from_tgs != Nonce2) {
+            cout << "WARNING! DIFFERENT NONCE! THIS MAY BE A REPLAY ATTACK!" << endl << endl;
+        }
+
+        //kiểm tra thời hạn vé
+        std::chrono::system_clock::time_point from = secondTimestampToTimePoint(from_time_from_tgs);
+        std::chrono::system_clock::time_point till = secondTimestampToTimePoint(till_time_from_tgs);
+        std::chrono::system_clock::time_point rtime = secondTimestampToTimePoint(rtime_time_from_tgs);
+        time_t from_t = chrono::system_clock::to_time_t(from);
+        time_t till_t = chrono::system_clock::to_time_t(till);
+        time_t rtime_t = std::chrono::system_clock::to_time_t(rtime);
+
+        std::string rtime_str = timeToString(rtime_t);
+        std::string from_str = timeToString(from_t);
+        std::string till_str = timeToString(till_t);
+        std::cout << "Thời gian FROM  : " << from_str << '\n';
+        std::cout << "Thời gian TILL  : " << till_str << '\n';
+        std::cout << "Thời gian RTIME  : " << rtime_str << '\n';
+
+        string checkT = check_ticket_time(from_time_from_tgs, till_time_from_tgs, rtime_time_from_tgs);
+        if (checkT == "RENEW") {
+            cout << "Ticket need to RENEW!" << endl << endl;
+            renewable = true;
+            count++;
+        }
+
+    } while (renewable);
 
     // Đóng kết nối với TGS Server
     closesocket(clientSocket);
@@ -541,7 +621,7 @@ int main() {
     serverAddr.sin_port = htons(8802); // Kết nối tới cổng 8802 của Service Server
 
     if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        cout << "Connection to Service Server failed." << endl;
+        cerr << "Connection to Service Server failed." << endl;
         closesocket(clientSocket);
         WSACleanup();
         return 1;
@@ -569,7 +649,7 @@ int main() {
                 iv_from_V = extractAfterSecondDoublePipe(s);
             }
             catch (const exception& ex) {
-                cout << "Error: " << ex.what() << endl << endl;
+                cerr << "Error: " << ex.what() << endl << endl;
             }
 
             string decryptedText = decryptMessFromV(s, K_c_v, iv_from_V);
@@ -580,7 +660,7 @@ int main() {
         else cout << endl << "Receive from V: " << buffer << endl;
     }
     else {
-        cout << "No response or error receiving from Service Server." << endl;
+        cerr << "No response or error receiving from Service Server." << endl;
     }
 
     // Đóng kết nối với Service Server
@@ -589,6 +669,3 @@ int main() {
 
     return 0;
 }
-
-*/
-

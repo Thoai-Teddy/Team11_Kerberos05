@@ -26,6 +26,13 @@
 
 using namespace std;
 
+//Option step 5
+enum APOptions {
+    RESERVED = 1u << 31,       // Bit 0 (MSB)
+    USE_SESSION_KEY = 1u << 30,// Bit 1
+    MUTUAL_REQUIRED = 1u << 29 // Bit 2
+};
+
 // Định nghĩa Option và Flag:
 enum Option : uint32_t {
     OP_NONE = 0,
@@ -37,7 +44,6 @@ enum TicketFlag : uint32_t {
     INITIAL = 1 << 0,
     RENEWABLE = 1 << 1
 };
-
 
 class info {
 private:
@@ -57,11 +63,10 @@ public:
         const std::string& pub_key, const std::string& pri_key)
         : id(id), ad(ad), realm(realm), pub_key(pub_key), pri_key(pri_key) {}
 
-    std::string getID() const;       
-    std::string getAD() const;       
-    std::string getRealm() const;  
-    std::string getPublicKey() const; 
-    std::string getPrivateKey() const;
+    std::string getID() const;
+    std::string getAD() const;
+    std::string getRealm() const;
+    std::string getPublicKey() const;
     void setPrivateKey(std::string privateKey);
     void setID(const std::string& newID) { id = newID; }
     void setAD(const std::string& newAD) { ad = newAD; }
@@ -143,7 +148,7 @@ struct ServiceServerData {
         uint32_t seq, const std::string& kc)
         : clientID(client), encryptedData(encData), TS2(ts), subkey(subk), seqNum(seq), kcV(kc) {}
 };
-ServiceTicket createServiceTicket(const std::string& clientID, const std::string& flags, const std::string& sessionKey, const std::string& clientAD, 
+ServiceTicket createServiceTicket(const std::string& clientID, const std::string& flags, const std::string& sessionKey, const std::string& clientAD,
     const std::string& realmc, const std::chrono::system_clock::time_point& from, const std::chrono::system_clock::time_point& till,
     const std::chrono::system_clock::time_point& rtime);
 
@@ -156,6 +161,7 @@ std::string createSubkey(const std::string& key, const std::string& data);
 
 // Hàm hỗ trợ: chuyển timestamp dạng chuỗi sang std::chrono::system_clock::time_point
 chrono::system_clock::time_point millisecTimestampToTimePoint(const string& timestampStr);
+chrono::system_clock::time_point secondTimestampToTimePoint(const string& ts_str);
 
 //hash SHA1
 uint32_t left_rotate(uint32_t value, unsigned int count);
@@ -261,5 +267,11 @@ bool checkAPOptionsFromBitString(const std::string& bitStr); //check option in s
 bool hasRenewableFlag(const string& bitString);
 //kiểm tra nếu Option là RENEW
 bool isRenewOption(const std::string& bitString);
+
+//hàm tách option và ticket cần renew
+void extractOptionAndTicket(string& input, string& option, string& ticket, string& iv_v);
+std::string timeToString(time_t t);
+
 // Tạo options cho bước 1
 uint32_t createOptions(bool initial, bool renew);
+

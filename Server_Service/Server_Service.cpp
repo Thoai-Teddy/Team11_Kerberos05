@@ -2,7 +2,7 @@
 
 const int BLOCK_SIZE = 16;
 
-string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, const string& iv, const string& priKeyV) {
+string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, const string& iv, const string& priKeyV, ServiceTicket& ticket) {
     // Bước 1: Chuyển encryptTicket thành vector<unsigned char>
     vector<unsigned char> cipherBytes = hexStringToVector(encryptTicket);
 
@@ -19,7 +19,7 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     cout << "DECRYPT TICKET V: " << decryptedText << endl << endl;
 
     // Bước 5: Parse ServiceTicket
-    ServiceTicket ticket = parseServiceTicket(decryptedText);
+    ticket = parseServiceTicket(decryptedText);
 
     cout << "IDC: " << ticket.clientID << endl
         << "ADC: " << ticket.clientAD << endl
@@ -73,35 +73,29 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     }
     else return "mismatch!";
 
-    /*auto now = chrono::system_clock::now();
-    if (now < ticket.timeInfo.from || now > ticket.timeInfo.till) {
-        cout << "Invalid ticket date!" << endl;
-        return "mismatch!";
-    }*/
-
     time_t from = chrono::system_clock::to_time_t(ticket.timeInfo.from);
     time_t till = chrono::system_clock::to_time_t(ticket.timeInfo.till);
     time_t rtime = chrono::system_clock::to_time_t(ticket.timeInfo.rtime);
     time_t t_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-    std::cout << "Thời gian FROM  : " << std::put_time(std::localtime(&from), "%d/%m/%Y %H:%M:%S") << '\n';
-    std::cout << "Thời gian TILL  : " << std::put_time(std::localtime(&till), "%d/%m/%Y %H:%M:%S") << '\n';
-    std::cout << "Thời gian RTIME : " << std::put_time(std::localtime(&rtime), "%d/%m/%Y %H:%M:%S") << '\n';
-    std::cout << "Thời gian NOW   : " << std::put_time(std::localtime(&t_now), "%d/%m/%Y %H:%M:%S") << '\n';
+    std::cout << "Thời gian FROM  : " << std::put_time(std::localtime(&from), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Thời gian TILL  : " << std::put_time(std::localtime(&till), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Thời gian RTIME : " << std::put_time(std::localtime(&rtime), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Thời gian NOW   : " << std::put_time(std::localtime(&t_now), "%Y/%m/%d %H:%M:%S") << '\n';
 
-    /*string checkTime = check_ticket_time(to_string(from), to_string(till), to_string(rtime));
+    string checkTime = check_ticket_time(to_string(from), to_string(till), to_string(rtime));
     if (checkTime == "VALID") {
-        cout << "Valid ticket date!" << endl << endl;
+        cout << endl << "Valid ticket date" << endl << endl;
     }
     if (checkTime == "INVALID" || checkTime == "RENEW") {
         cout << "Invalid ticket date!" << endl << endl;
         return "mismatch!";
-    }*/
+    }
 
     return ticket.sessionKey;
 }
 
-string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, ServiceServerData& service, info& client, const string& iv, const string& priKeyV) {
+string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, ServiceServerData& service, const ServiceTicket ticket, info& client, const string& iv, const string& priKeyV) {
     vector<unsigned char> cipherBytes = hexStringToVector(encryptAuthenticator);
     vector<unsigned char> key_vec(priKeyV.begin(), priKeyV.end());
     vector<unsigned char> ivBytes(iv.begin(), iv.end());
@@ -125,27 +119,25 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, Servi
         return "mismatch!";
     }
 
-    auto now = chrono::system_clock::now();
-    /*if (now < auth.TS2) {
-        return "Timestamp is too early!";
-    }*/
-    // In TS2 và giờ hiện tại (an toàn theo chuẩn C++)
-    time_t now_c = chrono::system_clock::to_time_t(now);
-    time_t ts2_c = chrono::system_clock::to_time_t(auth.TS2);
+    time_t from = chrono::system_clock::to_time_t(ticket.timeInfo.from);
+    time_t till = chrono::system_clock::to_time_t(ticket.timeInfo.till);
+    time_t ts2_time = std::chrono::system_clock::to_time_t(auth.TS2);
 
-    tm now_tm, ts2_tm;
-    localtime_s(&now_tm, &now_c);
-    localtime_s(&ts2_tm, &ts2_c);
+    std::string ts2_str = timeToString(ts2_time);
+    std::string from_str = timeToString(from);
+    std::string till_str = timeToString(till);
+    std::cout << "Thời gian FROM  : " << from_str << '\n';
+    std::cout << "Thời gian TILL  : " << till_str << '\n';
+    std::cout << "Thời gian TS2  : " << ts2_str << '\n';
 
-    // Kiểm tra lệch thời gian cho phép
-    const int allowedSkewSeconds = 300; // 5 phút
-    auto diff = chrono::duration_cast<chrono::seconds>(now - auth.TS2).count();
-
-    /*if (abs(diff) > allowedSkewSeconds) {
+    if (ts2_time < from || ts2_time > till) {
         sucess = false;
-        cout << "Invalid time in Authen!" << endl << endl;
+        std::cerr << "[ERROR] TS2 invalid!\n";
         return "mismatch!";
-    }*/
+    }
+    else {
+        std::cout << "[OK] TS2 valid.\n";
+    }
 
     if (sucess) {
         service.TS2 = auth.TS2;
@@ -200,13 +192,14 @@ string processServiceResponse(ServiceServerData& service, const string& decryptM
     const string& ivAuth, const string& priKeyV, string iv) {
     string cipherTicket, options, authen;
     string encryptMessage = "";
+    ServiceTicket ticket;
 
     splitAndAssign(decryptMessage, options, cipherTicket, authen);
 
-    string sessionKey = authenTicketAndTakeSessionKey(cipherTicket, client, ivTicket, priKeyV);
+    string sessionKey = authenTicketAndTakeSessionKey(cipherTicket, client, ivTicket, priKeyV, ticket);
     if (sessionKey == "mismatch!") return "Invalid information in Ticket!";
     else {
-        string subKey = authenAuthenticatorAndGetSubkey(authen, service, client, ivAuth, sessionKey);
+        string subKey = authenAuthenticatorAndGetSubkey(authen, service, ticket, client, ivAuth, sessionKey);
         if (subKey == "mismatch!") return "Invalid information in Authenticator!";
         else if (!checkAPOptionsFromBitString(options)) {
             encryptMessage = "Kerberos 5 authentication complete!";
