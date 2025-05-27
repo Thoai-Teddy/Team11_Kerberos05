@@ -27,6 +27,20 @@ std::string timeTostring(std::chrono::system_clock::time_point timePoint) {
     return oss.str();  // Không có \n
 }
 
+
+
+string decryptAuthenticatorc(const string& Mess, const string& Kc_tgs, const string& iv_authen) {
+    vector<unsigned char> cipherBytes = hexStringToVector(Mess);
+    vector<unsigned char> key(Kc_tgs.begin(), Kc_tgs.end());
+    vector<unsigned char> ivBytes(iv_authen.begin(), iv_authen.end());
+
+    vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key, ivBytes);
+
+    string decryptedText = unpadString(decryptedBytes);
+
+    return decryptedText;
+}
+
 using namespace std;
 
 int main() {
@@ -63,8 +77,43 @@ int main() {
 	memset(buffer, 0, sizeof(buffer));
 	recv(clientSocket, buffer, sizeof(buffer), 0);
 	cout << "Received data from Client: " << buffer << endl;
-	// Tách dữ liệu từ Client
-	std::vector <std::string> client_request_vector = splitString(buffer, "|");
+
+    // Lấy iv để giải mã TGS ticket
+    string txt(buffer);
+    string iv_pre_tgs_ticket = "";
+    try {
+        iv_pre_tgs_ticket = extractAfterFirstDoublePipe(txt);
+    }
+    catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl << endl;
+    }
+
+    if (iv_pre_tgs_ticket.size() > BLOCK_SIZE) {
+        iv_pre_tgs_ticket = iv_pre_tgs_ticket.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> iv_tgs_ticket(iv_pre_tgs_ticket.begin(), iv_pre_tgs_ticket.end());
+
+    while (iv_tgs_ticket.size() < BLOCK_SIZE) iv_tgs_ticket.push_back(0x00); // Bổ sung nếu thiếu
+
+    // Tách iv để giải mã authenticatorc
+    string iv_authen = "";
+    try {
+        iv_authen = extractAfterSecondDoublePipe(txt);
+    }
+    catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl << endl;
+    }
+
+    if (iv_authen.size() > BLOCK_SIZE) {
+        iv_authen = iv_authen.substr(0, BLOCK_SIZE);
+    }
+    vector<unsigned char> iv_a(iv_authen.begin(), iv_authen.end());
+
+    //message sau khi tách iv
+    //cout << "Response: " << txt << endl << endl;
+
+    while (iv_a.size() < BLOCK_SIZE) iv_a.push_back(0x00); // Bổ sung nếu thiếu
+	std::vector <std::string> client_request_vector = splitString(txt, "|");
     std::string options_from_client = client_request_vector[0];
     std::string id_v_from_client = client_request_vector[1];
     std::string times_from_from_client = client_request_vector[2];
@@ -77,7 +126,11 @@ int main() {
     for (size_t i = 7; i < client_request_vector.size(); ++i) {
         if (i > 7) authenticatorc_from_client += "|";  // thêm dấu phân cách
         authenticatorc_from_client += client_request_vector[i];
+        //cout << endl << "Authen: " << authenticatorc_from_client << endl << endl;
     }
+    cout << "Response: " << txt << endl << endl;
+    cout << "Received Authenticatorc: " << authenticatorc_from_client << endl << endl;
+
 
 
     std::string now = get_current_time_formatted();
@@ -90,7 +143,9 @@ int main() {
 
     cout << "Received Ticket TGS: " << ticket_tgs_from_client << "\n";
 
-    cout << "Received Authenticatorc: " << authenticatorc_from_client << "\n";
+	//std::string authenticatorc_decrypt = decryptAuthenticatorc(authenticatorc_from_client, K_c_tgs, iv_authen);
+
+    //cout << "Received Authenticatorc: " << authenticatorc_decrypt << "\n";
 
     //Giải mã Ticket TGS
     std::vector<unsigned char>  ticket_tgs_from_client_vector = hexStringToVector(ticket_tgs_from_client);
@@ -101,20 +156,14 @@ int main() {
     vector<unsigned char> key_tgs(K_tgs.begin(), K_tgs.end());
     while (key_tgs.size() < BLOCK_SIZE) key_tgs.push_back(0x00); // Bổ sung nếu thiếu
 
-    // Tạo iv để giải mã TGS ticket (Mặc định bên AS)
-    string iv_pre_tgs_ticket = "WelcomeToOurHome";
-    if (iv_pre_tgs_ticket.size() > BLOCK_SIZE) {
-        iv_pre_tgs_ticket = iv_pre_tgs_ticket.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> iv_tgs_ticket(iv_pre_tgs_ticket.begin(), iv_pre_tgs_ticket.end());
-
-    while (iv_tgs_ticket.size() < BLOCK_SIZE) iv_tgs_ticket.push_back(0x00); // Bổ sung nếu thiếu
-
     vector<unsigned char> plaintext_block_from_as = aes_cbc_decrypt(ticket_tgs_from_client_vector, key_tgs, iv_tgs_ticket);
     //cout << "Ticket TGS vector size: " << ticket_tgs_from_client_vector.size() << " bytes" << endl;
     //cout << "Decrypted block size (before unpad): " << plaintext_block_from_as.size() << " bytes" << endl;
 
     string plaintext_from_as = unpadString(plaintext_block_from_as);
+
+    
+
     cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_as << endl << endl;
 
 
@@ -130,6 +179,10 @@ int main() {
     TGS_ticket.times_till = parts_plaintext_from_as[6];
     TGS_ticket.times_rtime = parts_plaintext_from_as[7];
 
+    std::string authenticatorc_decrypt = decryptAuthenticatorc(authenticatorc_from_client, TGS_ticket.sessionKey, iv_authen);
+
+    cout << "Received Authenticatorc: " << authenticatorc_decrypt << "\n";
+
 	//Giải mã Authenticatorc
     //info client("","");
     //std::string iv="ThisIsMyHomeWork";
@@ -137,18 +190,17 @@ int main() {
     //std::string subkey_decrypt= authenAuthenticatorAndGetSubkey(authenticatorc_from_client, client, iv, priKeyV);
 
 
-	AuthenticatorC authenticator_decrypt = parseAuthenticator(authenticatorc_from_client);
+	AuthenticatorC authenticator_de = parseAuthenticator(authenticatorc_decrypt);
 
 
     //Kiểm tra
-
-    if (TGS_ticket.clientID != authenticator_decrypt.clientID) {
+    if (TGS_ticket.clientID != authenticator_de.clientID) {
         // Sai client → từ chối
         throw std::runtime_error("Client ID mismatch between TicketTGS and AuthenticatorC");
     } else {
 		cout << "Client ID match between TicketTGS and AuthenticatorC" << endl;
     }
-    if (TGS_ticket.realmc != authenticator_decrypt.realmc) {
+    if (TGS_ticket.realmc != authenticator_de.realmc) {
         // Sai realm → từ chối
         throw std::runtime_error("Realm mismatch between TicketTGS and AuthenticatorC");
     }
@@ -174,7 +226,7 @@ int main() {
     //Mã hóa
 	ServiceTicket Ticket_V;
     Ticket_V.flags = options_from_client;
-	Ticket_V.sessionKey = K_v;
+	Ticket_V.sessionKey = K_c_v;
 	Ticket_V.realmc = TGS_ticket.realmc;
 	Ticket_V.clientID = TGS_ticket.clientID;
 	Ticket_V.clientAD = TGS_ticket.clientAD;
@@ -193,6 +245,7 @@ int main() {
 
 
     // Padding plaintext
+    cout << endl << "PLAINTEXT TICKET V:" << Ticket_V_plaintext << endl << endl;
     vector<unsigned char> padded_Ticket_V_plaintext = padString(Ticket_V_plaintext);
     vector<unsigned char> padded_plaintext = padString(plaintext);
 
@@ -206,7 +259,9 @@ int main() {
     while (Key_v.size() < BLOCK_SIZE) Key_v.push_back(0x00); // Bổ sung nếu thiếu
 
     // Tạo iv để mã hóa Ticket V
-    string iv_pre_v_ticket = "HiYouAreNotAlone";
+    //string iv_pre_v_ticket = "HiYouAreNotAlone";
+    string iv_pre_v_ticket = "";
+    iv_pre_v_ticket = generateRandomString();
     if (iv_pre_v_ticket.size() > BLOCK_SIZE) {
         iv_pre_v_ticket = iv_pre_v_ticket.substr(0, BLOCK_SIZE);
     }
@@ -219,7 +274,13 @@ int main() {
 
     cout << "Ticket V (encrypted by K_v): " << Ticket_V_encrypted_str << endl << endl;
 
+    vector<unsigned char> cipherBytes = hexStringToVector(Ticket_V_encrypted_str);
+    vector<unsigned char> key(K_v.begin(), K_v.end());
+    vector<unsigned char> ivBytes(iv_pre_v_ticket.begin(), iv_pre_v_ticket.end());
+    vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key, ivBytes);
+    string decryptedText = unpadString(decryptedBytes);
 
+    cout << "DECRYPT MESS: " << decryptedText << endl << endl;
 
     // Mã hóa plaintext
     std::string K_c_tgs = TGS_ticket.sessionKey;
@@ -231,7 +292,8 @@ int main() {
     while (Key_c_tgs.size() < BLOCK_SIZE) Key_c_tgs.push_back(0x00); // Bổ sung nếu thiếu
 
     // Tạo iv để mã hóa plaintext
-    string iv_pre_v = "ImAloneAndAboutY";
+    //string iv_pre_v = "ImAloneAndAboutY";
+    string iv_pre_v = generateRandomString();
     if (iv_pre_v.size() > BLOCK_SIZE) {
         iv_pre_v = iv_pre_v.substr(0, BLOCK_SIZE);
     }
@@ -246,7 +308,7 @@ int main() {
 
 
     // Gửi dữ liệu về cho client
-    string response = Ticket_V.realmc + "|" + Ticket_V.clientID + "|" + Ticket_V_encrypted_str + "|" + ciphertext_str;
+    string response = Ticket_V.realmc + "|" + Ticket_V.clientID + "|" + Ticket_V_encrypted_str + "||" + iv_pre_v_ticket + "|" + ciphertext_str + "||" + iv_pre_v;
     cout << "Response from server: " << response << endl << endl;
     send_message(clientSocket, response);
 

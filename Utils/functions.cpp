@@ -1,5 +1,12 @@
 ﻿#include "./Utils.h"
 
+//Option step 5
+enum APOptions {
+    RESERVED = 1u << 31,       // Bit 0 (MSB)
+    USE_SESSION_KEY = 1u << 30,// Bit 1
+    MUTUAL_REQUIRED = 1u << 29 // Bit 2
+};
+
 const int BLOCK_SIZE = 16;
 const int Nk = 4;          // 8 words * 4 bytes = 32 bytes = 256 bits
 const int Nr = 10;         // 14 rounds cho AES-256
@@ -84,6 +91,11 @@ std::string info::getRealm() const {
 std::string info::getPublicKey() const {
     return pub_key;
 };
+
+std::string info::getPrivateKey() const {
+    return pri_key;
+};
+
 
 void info::setPrivateKey(std::string privateKey) {
     this->pri_key = privateKey;
@@ -670,19 +682,19 @@ ServiceTicket parseServiceTicket(const string& decryptedText) {
 
 //Hàm in ServiceTicket:
 void printServiceTicket(const ServiceTicket& ticket) {
-    cout << "Flags      : " << ticket.flags << endl;
-    cout << "SessionKey : " << ticket.sessionKey << endl;
-    cout << "Realmc     : " << ticket.realmc << endl;
-    cout << "ClientID   : " << ticket.clientID << endl;
-    cout << "ClientAD   : " << ticket.clientAD << endl;
+    std::cout << "Flags      : " << ticket.flags << endl;
+    std::cout << "SessionKey : " << ticket.sessionKey << endl;
+    std::cout << "Realmc     : " << ticket.realmc << endl;
+    std::cout << "ClientID   : " << ticket.clientID << endl;
+    std::cout << "ClientAD   : " << ticket.clientAD << endl;
 
     auto tp_to_ms = [](chrono::system_clock::time_point tp) -> uint64_t {
         return chrono::duration_cast<chrono::milliseconds>(tp.time_since_epoch()).count();
         };
 
-    cout << "Time From  : " << tp_to_ms(ticket.timeInfo.from) << endl;
-    cout << "Time Till  : " << tp_to_ms(ticket.timeInfo.till) << endl;
-    cout << "Time Rtime : " << tp_to_ms(ticket.timeInfo.rtime) << endl;
+    std::cout << "Time From  : " << tp_to_ms(ticket.timeInfo.from) << endl;
+    std::cout << "Time Till  : " << tp_to_ms(ticket.timeInfo.till) << endl;
+    std::cout << "Time Rtime : " << tp_to_ms(ticket.timeInfo.rtime) << endl;
 }
 
 //hàm lưu giá trị vào AuthenticatorC sau khi giải mã:
@@ -804,340 +816,218 @@ std::string build_times(int ticket_lifetime, int renew_lifetime) {
     return from + "|" + till + "|" + rtime;
 }
 
+
 void send_message(SOCKET sock, const std::string& message)
 {
     send(sock, message.c_str(), message.size(), 0);
 }
 
+void set_rec_time_out(SOCKET sock, int milliseconds) {
+    DWORD timeout = milliseconds;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) < 0) {
+        throw std::runtime_error("Failed to set receive timeout.");
+    }
+}
+
 std::string receive_message(SOCKET sock) {
     char buffer[4096];
     int bytesReceived = recv(sock, buffer, sizeof(buffer), 0);
+
+    if (bytesReceived == 0) {
+        throw std::runtime_error("Connection close by the peer.");
+    }
+
     if (bytesReceived == SOCKET_ERROR) {
-        throw std::runtime_error("Receive failed");
+        int errorCode = WSAGetLastError();
+        if (errorCode == WSAETIMEDOUT) {
+            throw std::runtime_error("Receive timeout occurred.");
+        }
+        else {
+            throw std::runtime_error("Receive failed with error code - " + std::to_string(errorCode));
+        }
     }
     return std::string(buffer, bytesReceived);
 }
 
-<<<<<<< HEAD
-
-
 /*
-int main() {
-   std::string clientID1 = "client123";
-   std::string encryptedData = "encryptedData";
-   std::chrono::system_clock::time_point TS2 = std::chrono::system_clock::now();
-   std::string subkey = "subkey123";
-   uint32_t seqNum = 1001;
-   std::string kcV = "kcV123";
-=======
->>>>>>> a1bf0508ad8734dbfba3f7ce9199580c8f59e1aa
-
-//int main() {
-//   std::string clientID1 = "client123";
-//   std::string encryptedData = "encryptedData";
-//   std::chrono::system_clock::time_point TS2 = std::chrono::system_clock::now();
-//   std::string subkey = "subkey123";
-//   uint32_t seqNum = 1001;
-//   std::string kcV = "kcV123";
-//
-//   ServiceServerData service(clientID1, encryptedData, TS2, subkey, seqNum, kcV);
-//
-//   using namespace std::chrono;
-//   auto now = system_clock::now();
-//   auto millis = duration_cast<milliseconds>(now.time_since_epoch()).count();
-//    string plaintext = "client123|realmA|" + to_string(millis) +"| subkey123 | 12345";
-//
-//
-//    std::string flag = "01";                // Flag
-//    std::string sessionKey = "sessionKey123"; // Kc,v
-//    std::string realmc = "realmA";            // Realmc
-//    std::string clientID = "client123";       // IDC
-//    std::string clientAD = "127.0.0.1";       // ADC
-//
-//    string iv_str = "1234567890abcdef";
-//    string encryptMess = encryptServerServiceData(service, subkey, iv_str, sessionKey);
-//    cout << "encrypt Mess: " << encryptMess << endl << endl;
-//
-//     /*Lấy thời gian hiện tại*/
-//    uint64_t currentTime = getCurrentTimestamp();
-//
-//     /*Giả sử:
-//     - `from` là thời gian hiện tại
-//     - `till` là 1 giờ sau
-//     - `rtime` là 2 giờ sau*/
-//    uint64_t from = currentTime;
-//    uint64_t till = currentTime + 3600000;  // 1 giờ sau
-//    uint64_t rtime = currentTime + 7200000; // 2 giờ sau
-//
-//    /* Tạo plaintext từ các tham số trên*/
-//    /*std::string plaintext = buildServiceTicketPlaintext(flag, sessionKey, realmc, clientID, clientAD, from, till, rtime);*/
-//
-//    /* In plaintext ra màn hình*/
-//    std::cout << "Generated Plaintext: " << plaintext << std::endl;
-//
-//
-//    string key_input = "privateKey1231111";
-//
-//    if (key_input.size() > BLOCK_SIZE) {
-//        key_input = key_input.substr(0, BLOCK_SIZE);
-//    }
-//    vector<unsigned char> key(key_input.begin(), key_input.end());
-//    while (key.size() < BLOCK_SIZE) key.push_back(0x00); // Bổ sung nếu thiếu
-//
-//    string iv_pre = "1234567890abcdef";
-//    if (iv_pre.size() > BLOCK_SIZE) {
-//        iv_pre = iv_pre.substr(0, BLOCK_SIZE);
-//    }
-//    vector<unsigned char> iv(iv_pre.begin(), iv_pre.end());
-//    while (iv.size() < BLOCK_SIZE) iv.push_back(0x00); // Bổ sung nếu thiếu
-//
-//    /*Padding plaintext*/
-//    vector<unsigned char> padded_plaintext = padString(plaintext);
-//
-//     /*Mã hóa*/
-//    vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, key, iv);
-//    string cipher = bytesToHex(ciphertext);
-//
-//    cout << "cipher after string:" << cipher << endl;
-//
-//     /*In ciphertext dạng hex*/
-//    cout << "Ciphertext (hex): ";
-//    for (unsigned char c : ciphertext) {
-//        printf("%02X", c);
-//    }
-//    cout << endl;
-//
-//    string k = unpadString2(key);
-//    string i = unpadString2(iv);
-//    cout << "key string: " << k << endl << "iv string: " << i << endl;
-//
-//    key = padString(k);
-//    iv = padString(i);
-//
-//     /*Giải mã*/
-//    vector<unsigned char> decrypted_padded_plaintext = aes_cbc_decrypt(ciphertext, key, iv);
-//
-//     /*Gỡ padding*/
-//    string decrypted_plaintext = unpadString(decrypted_padded_plaintext);
-//
-//    /* In plaintext sau giải mã*/
-//    cout << "Plaintext sau khi giai ma: " << decrypted_plaintext << endl;
-//
-//    info client("client123", "127.0.0.1", "realmA", "sessionKey123111", "privateKey123");
-//
-//    /* Kiểm tra hàm*/
-//    try {
-//        string subkey = authenAuthenticatorAndGetSubkey(cipher, client, iv_pre, key_input);
-//        cout << "Subkey: " << subkey << endl;
-//
-//        /*string sessionKey = authenTicketAndTakeSessionKey(cipher, client, iv_pre, key_input);
-//        cout << "Session Key: " << sessionKey << endl;*/
-//
-//       /* cout << endl << "start decrypt test:" << endl;
-//
-//        vector<unsigned char> cipherBytes = hexStringToVector(cipher);
-//        vector<unsigned char> key_vec(k.begin(), k.end());
-//        vector<unsigned char> ivBytes(i.begin(), i.end());
-//        vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key_vec, ivBytes);
-//        string deText = unpadString(decryptedBytes);
-//        cout << "result: " << deText << endl;*/
-//    }
-//    catch (const exception& e) {
-//        cout << "Error: " << e.what() << endl;
-//    }
-//
-//    return 0;
-//}
-
-
-<<<<<<< HEAD
-    std::string flag = "01";                // Flag
-    std::string sessionKey = "sessionKey123"; // Kc,v
-    std::string realmc = "realmA";            // Realmc
-    std::string clientID = "client123";       // IDC
-    std::string clientAD = "127.0.0.1";       // ADC
-
-    string iv_str = "1234567890abcdef";
-    string encryptMess = encryptServerServiceData(service, subkey, iv_str, sessionKey);
-    cout << "encrypt Mess: " << encryptMess << endl << endl;
-
-     Lấy thời gian hiện tại
-    uint64_t currentTime = getCurrentTimestamp();
-
-     Giả sử:
-     - `from` là thời gian hiện tại
-     - `till` là 1 giờ sau
-     - `rtime` là 2 giờ sau
-    uint64_t from = currentTime;
-    uint64_t till = currentTime + 3600000;  // 1 giờ sau
-    uint64_t rtime = currentTime + 7200000; // 2 giờ sau
-
-    /* Tạo plaintext từ các tham số trên*/
-    /*std::string plaintext = buildServiceTicketPlaintext(flag, sessionKey, realmc, clientID, clientAD, from, till, rtime);
-
-    In plaintext ra màn hình
-    std::cout << "Generated Plaintext: " << plaintext << std::endl;
-
-
-    string key_input = "privateKey1231111";
-
-    if (key_input.size() > BLOCK_SIZE) {
-        key_input = key_input.substr(0, BLOCK_SIZE);
+std::string receive_message(SOCKET sock) {
+    char buffer[4096];
+    int bytesReceived = recv(sock, buffer, sizeof(buffer), 0);
+    if (bytesReceived == SOCKET_ERROR) {
+        //throw std::runtime_error("Receive failed");
+        std::cout << "RECEIVE MESSAGE FAILED!" << std::endl;
+        return "RECEIVE MESSAGE FAILED!";
     }
-    vector<unsigned char> key(key_input.begin(), key_input.end());
-    while (key.size() < BLOCK_SIZE) key.push_back(0x00); // Bổ sung nếu thiếu
-
-    string iv_pre = "1234567890abcdef";
-    if (iv_pre.size() > BLOCK_SIZE) {
-        iv_pre = iv_pre.substr(0, BLOCK_SIZE);
-    }
-    vector<unsigned char> iv(iv_pre.begin(), iv_pre.end());
-    while (iv.size() < BLOCK_SIZE) iv.push_back(0x00); // Bổ sung nếu thiếu
-
-    /*Padding plaintext
-    vector<unsigned char> padded_plaintext = padString(plaintext);
-
-     /*Mã hóa
-    vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, key, iv);
-    string cipher = bytesToHex(ciphertext);
-
-    cout << "cipher after string:" << cipher << endl;
-
-     /*In ciphertext dạng hex
-    cout << "Ciphertext (hex): ";
-    for (unsigned char c : ciphertext) {
-        printf("%02X", c);
-    }
-    cout << endl;
-
-    string k = unpadString2(key);
-    string i = unpadString2(iv);
-    cout << "key string: " << k << endl << "iv string: " << i << endl;
-
-    key = padString(k);
-    iv = padString(i);
-
-     /*Giải mã
-    vector<unsigned char> decrypted_padded_plaintext = aes_cbc_decrypt(ciphertext, key, iv);
-
-     /*Gỡ padding
-    string decrypted_plaintext = unpadString(decrypted_padded_plaintext);
-
-    /* In plaintext sau giải mã
-    cout << "Plaintext sau khi giai ma: " << decrypted_plaintext << endl;
-
-    info client("client123", "127.0.0.1", "realmA", "sessionKey123111", "privateKey123");
-
-    /* Kiểm tra hàm
-    try {
-        string subkey = authenAuthenticatorAndGetSubkey(cipher, client, iv_pre, key_input);
-        cout << "Subkey: " << subkey << endl;
-
-        /*string sessionKey = authenTicketAndTakeSessionKey(cipher, client, iv_pre, key_input);
-        cout << "Session Key: " << sessionKey << endl;*/
-
-       /* cout << endl << "start decrypt test:" << endl;
-
-        vector<unsigned char> cipherBytes = hexStringToVector(cipher);
-        vector<unsigned char> key_vec(k.begin(), k.end());
-        vector<unsigned char> ivBytes(i.begin(), i.end());
-        vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key_vec, ivBytes);
-        string deText = unpadString(decryptedBytes);
-        cout << "result: " << deText << endl;
-    }
-    catch (const exception& e) {
-        cout << "Error: " << e.what() << endl;
-    }
-
-    return 0;
+    return std::string(buffer, bytesReceived);
 }
 */
-=======
->>>>>>> a1bf0508ad8734dbfba3f7ce9199580c8f59e1aa
 
-////Test tạo Message của Service Server
-    //// Tạo một đối tượng ServiceServerData với thông tin giả lập
-    //std::string clientID1 = "client123";
-    //std::string encryptedData = "encryptedData";
-    //std::chrono::system_clock::time_point TS2 = std::chrono::system_clock::now();
-    //std::string subkey = "subkey123";
-    //uint32_t seqNum = 1001;
-    //std::string kcV = "kcV123";
+/*
+void send_message(SOCKET sock, const std::string& message)
+{
+    std::string msg = message + "\n";
+    send(sock, msg.c_str(), msg.size(), 0);
+}
 
-    //ServiceServerData service(clientID1, encryptedData, TS2, subkey, seqNum, kcV);
+std::string receive_message(SOCKET sock) {
+    std::string result;
+    char ch;
+    int bytesReceived;
+    while (true) {
+        bytesReceived = recv(sock, &ch, 1, 0);
+        if (bytesReceived <= 0) break; // Lỗi hoặc đóng kết nối
+        if (ch == '\n') break;         // Kết thúc message
+        result += ch;
+    }
+    return result;
+}
+*/
 
-    //// Gọi hàm createServerServiceMessage để tạo tin nhắn
-    //std::string message = createServerServiceMessage(service, subkey);
+// Hàm tạo chuỗi 16 ký tự ngẫu nhiên (dùng để tạo key và iv)
+std::string generateRandomString(size_t length) {
+    const std::string characters =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
 
-    //// In ra tin nhắn đã tạo
-    //cout << "Server Service Message: " << message << endl;
+    // Dùng random_device để sinh seed ngẫu nhiên tốt hơn
+    static std::random_device rd;
+    static std::mt19937 engine(rd()); // Mersenne Twister engine
+    std::uniform_int_distribution<size_t> dist(0, characters.size() - 1);
 
-//int main() {   
-//    //test hàm xác minh authenticator và lấy subKey
-//    string encryptAuthenticator = "client123|realmA|1714300000000|subkey123|12345";  // Chuỗi mã hóa mẫu
-//    string iv = "1234567890abcdef";  // IV giả lập
-//    string priKeyV = "privateKey123"; // Private key giả lập
-//
-//    vector<unsigned char> iv_vec = padString(iv);
-//    vector<unsigned char> priKeyV_vec = padString(priKeyV);
-//    vector<unsigned char> padded_plaintext = padString(encryptAuthenticator);
-//
-//    // Mã hóa
-//    vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, priKeyV_vec, iv_vec);
-//    string padding_cipher = unpadString(ciphertext);
-//
-//    cout << "cipher: " << padding_cipher << endl;
-//
-//    info client("client123", "127.0.0.1", "realmA", "publicKey123", "privateKey123");
-//
-//    // Kiểm tra hàm
-//    try {
-//        string subkey = authenAuthenticatorAndGetSubkey(padding_cipher, client, iv, priKeyV);
-//        cout << "Subkey: " << subkey << endl;
-//    }
-//    catch (const exception& e) {
-//        cout << "Error: " << e.what() << endl;
-//    }
-//
-//    return 0;
-//}
+    std::string result;
+    for (size_t i = 0; i < length; ++i) {
+        result += characters[dist(engine)];
+    }
+    return result;
+}
 
 
-//Test các hảm parse thông tin từ Ticket và Authenticator
-//chrono::system_clock::time_point tnow = createTS2();
-//string stime = timeToString(tnow);
-//cout << "TS2: " << stime << endl;
-//
-//string key = "mysecretkey";
-//// Tạo subkey
-//string subkey = createSubkey(key, stime);
-//cout << "Subkey: " << subkey << endl << endl;
-//
-//string decryptedText = "OK|abcdef1234567890abcdef|REALM.COM|user01|192.168.1.100|1714300000000|1714400000000|1714500000000";
-//
-//try {
-//    ServiceTicket ticket = parseServiceTicket(decryptedText);
-//    cout << "Parse success! Print data of ServiceTicket:" << endl;
-//    printServiceTicket(ticket);
-//    cout << endl;
-//}
-//catch (const exception& e) {
-//    cerr << "Error: " << e.what() << endl;
-//}
-//
-//string deText = "client123|realmA|1714300000000|subkey123|12345";
-//
-//try {
-//    AuthenticatorC auth = parseAuthenticator(deText);
-//
-//    cout << "Print Authen:" << endl;
-//    // In ra các giá trị đã tách
-//    cout << "clientID: " << auth.clientID << endl;
-//    cout << "realm: " << auth.realmc << endl;
-//    cout << "TS2: " << chrono::system_clock::to_time_t(auth.TS2) << endl;
-//    cout << "subkey: " << auth.subkey << endl;
-//    cout << "seqNum: " << auth.seqNum << endl;
-//}
-//catch (const exception& e) {
-//    cout << "Error: " << e.what() << endl;
-//}
+std::string extractAfterFirstDoublePipe(std::string& input) {
+    size_t start = input.find("||");
+    if (start == std::string::npos)
+        throw std::invalid_argument("Cannot find '||' in input");
+
+    size_t contentStart = start + 2; // Bỏ qua "||"
+    size_t end = input.find("|", contentStart);
+    if (end == std::string::npos)
+        throw std::invalid_argument("Cannot find '|' after '||'");
+
+    std::string result = input.substr(contentStart, end - contentStart);
+
+    // Xóa chuỗi con + "||", KHÔNG xóa dấu '|'
+    input.erase(start, contentStart - start + result.size());
+
+    return result;
+}
+
+std::string extractAfterSecondDoublePipe(std::string& input) {
+    size_t last = input.rfind("||");
+    if (last == std::string::npos)
+        throw std::invalid_argument("Cannot find last '||'");
+
+    size_t start = last + 2;
+    std::string result = input.substr(start);
+
+    // Xóa phần "||" và chuỗi con phía sau nó
+    input.erase(last);
+
+    return result;
+}
+
+//check Time
+std::string create_ticket_time(int ticket_lifetime, int renew_lifetime) {
+    auto from_time = std::chrono::system_clock::now();
+    std::time_t from_c = std::chrono::system_clock::to_time_t(from_time);
+
+    // Till = From + ticket_lifetime tiếng (ticket có thể dùng trong ticket_lifetime tiếng)
+    auto till_time = std::chrono::system_clock::now() + std::chrono::minutes(ticket_lifetime);
+    std::time_t till_c = std::chrono::system_clock::to_time_t(till_time);
+
+
+    // Rtime = Till + renew_lifetime tiếng (vé có thể gia hạn thêm renew_lifetime tiếng)
+    auto rtime_time = till_time + std::chrono::minutes(renew_lifetime);
+    std::time_t rtime_c = std::chrono::system_clock::to_time_t(rtime_time);
+
+    // Ghép lại thành Times
+    return std::to_string(from_c) + "|" + std::to_string(till_c) + "|" + std::to_string(rtime_c);
+}
+
+std::string check_ticket_time(std::string from, std::string till, std::string rtime) {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+
+    std::time_t from_c = static_cast<std::time_t>(std::stoll(from));
+    std::time_t till_c = static_cast<std::time_t>(std::stoll(till));
+    std::time_t rtime_c = static_cast<std::time_t>(std::stoll(rtime));
+
+    if (now_c >= from_c && now_c <= till_c)
+        return "VALID";
+    else if (now_c >= till_c && now_c <= rtime_c)
+        return "RENEW";
+    else
+        return "INVALID";
+}
+
+//hàm tạo option bước 5
+uint32_t createAPOptions(bool useSessionKey, bool mutualRequired) {
+    uint32_t options = 0;
+    if (useSessionKey)
+        options |= USE_SESSION_KEY;
+    if (mutualRequired)
+        options |= MUTUAL_REQUIRED;
+    return options;
+}
+
+std::string apOptionsToBitString(uint32_t options) {
+    std::bitset<32> bits(options);
+    return bits.to_string(); // trả về chuỗi nhị phân dạng "011000...000"
+}
+
+bool checkAPOptionsFromBitString(const std::string& bitStr) {
+    if (bitStr.length() != 32) {
+        std::cerr << "Lỗi: Chuỗi APOptions không hợp lệ. Phải có 32 bit.\n";
+        return false;
+    }
+
+    // Chuyển chuỗi nhị phân sang số uint32_t
+    std::bitset<32> bits(bitStr);
+    uint32_t options = static_cast<uint32_t>(bits.to_ulong());
+
+    // Kiểm tra cả 2 bit đều bật hay không
+    bool useSessionKey = (options & USE_SESSION_KEY) != 0;
+    bool mutualRequired = (options & MUTUAL_REQUIRED) != 0;
+
+    return (useSessionKey && mutualRequired);
+}
+
+//kiểm tra flag renewable
+bool hasRenewableFlag(const std::string& bitString) {
+    // Kiểm tra độ dài chuỗi phải là 32 ký tự (bitset<32>)
+    if (bitString.length() != 32) return false;
+
+    // RENEWABLE nằm ở bit số 30 từ trái sang phải (bit số 1 từ phải sang nếu tính theo giá trị enum)
+    // Do std::bitset tạo chuỗi từ MSB -> LSB, ta cần truy cập đúng vị trí
+    // Bit thấp nhất (LSB - vị trí 31) là bit 0 => RENEWABLE = 1 << 1 => vị trí 30
+    return bitString[30] == '1';
+}
+
+//kiểm tra nếu Option là RENEW
+bool isRenewOption(const std::string& bitString) {
+    // Kiểm tra độ dài hợp lệ
+    if (bitString.length() != 32) return false;
+
+    // RENEW = 1 << 1 → bit số 1 → tương ứng vị trí 30 trong chuỗi
+    // Vì std::bitset<32> tạo chuỗi theo thứ tự từ MSB đến LSB (bit 31 xuống bit 0)
+    return bitString[30] == '1';
+}
+
+// Tạo option cho bước 1
+uint32_t createOptions(bool initial, bool renew) {
+    uint32_t options = 0;
+    if (initial)
+        options |= OP_INITIAL; //OR
+    if (renew)
+        options |= RENEW;
+    return options;
+}

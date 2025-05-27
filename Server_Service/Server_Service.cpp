@@ -2,7 +2,7 @@
 
 const int BLOCK_SIZE = 16;
 
-string authenTicketAndTakeSessionKey(const string& encryptTicket, const info& client, const string& iv, const string& priKeyV) {
+string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, const string& iv, const string& priKeyV) {
     // Bước 1: Chuyển encryptTicket thành vector<unsigned char>
     vector<unsigned char> cipherBytes = hexStringToVector(encryptTicket);
 
@@ -16,32 +16,96 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, const info& cl
     // Bước 4: Bỏ padding để lấy chuỗi gốc
     string decryptedText = unpadString(decryptedBytes);
 
+    cout << "DECRYPT TICKET V: " << decryptedText << endl << endl;
+
     // Bước 5: Parse ServiceTicket
     ServiceTicket ticket = parseServiceTicket(decryptedText);
 
+    cout << "IDC: " << ticket.clientID << endl
+        << "ADC: " << ticket.clientAD << endl
+        << "RealmC: " << ticket.realmc << endl;
+
     // Bước 6: Xác thực
-    if (ticket.clientID != client.getID()) {
-        return "mismatch!";
-    }
-    if (ticket.clientAD != client.getAD()) {
-        return "mismatch!";
-    }
-    if (ticket.realmc != client.getRealm()) {
-        return "mismatch!";
+    //Connect to DB SQL Server
+    soci::session sql(soci::odbc,
+        "Driver={ODBC Driver 17 for SQL Server};"
+        "Server=DESKTOP-UE4ET37;"
+        "Database=SERVERV;"
+        "Uid=sa;"
+        "Pwd=211038;"
+        "TrustServerCertificate=Yes;"
+        "Encrypt=Yes;");
+
+    std::cout << "Kết nối thành công tới SERVERV!\n";
+
+    std::string realm, address;
+
+    // Truy vấn thông tin REALMC và ADC theo IDC
+    soci::indicator indRealm, indAddress;
+    soci::statement st = (sql.prepare <<
+        "SELECT REALMC, ADC FROM dbo.Client WHERE IDC = :idc",
+        soci::use(ticket.clientID), soci::into(realm, indRealm), soci::into(address, indAddress));
+
+    // Kiểm tra kết quả và gán giá trị nếu hợp lệ
+    st.execute();
+    if (st.fetch() && indRealm == soci::i_ok && indAddress == soci::i_ok) {
+        cout << "AD from DB: " << address << endl
+            << "RealmC from DB: " << realm << endl << endl;
+        client.setID(ticket.clientID);
+        client.setAD(address);
+        client.setRealm(realm);
     }
 
-    auto now = chrono::system_clock::now();
-    if (now < ticket.timeInfo.from || now > ticket.timeInfo.till) {
-        return "mismatch!";
+    if (client.getID() != "") {
+        std::cout << "Tìm thấy client:\n";
+        std::cout << "ID: " << client.getID() << "\n";
+        std::cout << "ADC: " << client.getAD() << "\n";
+        std::cout << "Realm: " << client.getRealm() << "\n\n";
+
+        if (client.getAD() != ticket.clientAD) {
+            cout << "Invalid ADC!" << endl << endl;
+            return "mismatch!";
+        }
+        if (client.getRealm() != ticket.realmc) {
+            cout << "Invalid RealmC!" << endl << endl;
+            return "mismatch!";
+        }
     }
+    else return "mismatch!";
+
+    /*auto now = chrono::system_clock::now();
+    if (now < ticket.timeInfo.from || now > ticket.timeInfo.till) {
+        cout << "Invalid ticket date!" << endl;
+        return "mismatch!";
+    }*/
+
+    time_t from = chrono::system_clock::to_time_t(ticket.timeInfo.from);
+    time_t till = chrono::system_clock::to_time_t(ticket.timeInfo.till);
+    time_t rtime = chrono::system_clock::to_time_t(ticket.timeInfo.rtime);
+    time_t t_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
+    std::cout << "Thời gian FROM  : " << std::put_time(std::localtime(&from), "%d/%m/%Y %H:%M:%S") << '\n';
+    std::cout << "Thời gian TILL  : " << std::put_time(std::localtime(&till), "%d/%m/%Y %H:%M:%S") << '\n';
+    std::cout << "Thời gian RTIME : " << std::put_time(std::localtime(&rtime), "%d/%m/%Y %H:%M:%S") << '\n';
+    std::cout << "Thời gian NOW   : " << std::put_time(std::localtime(&t_now), "%d/%m/%Y %H:%M:%S") << '\n';
+
+    /*string checkTime = check_ticket_time(to_string(from), to_string(till), to_string(rtime));
+    if (checkTime == "VALID") {
+        cout << "Valid ticket date!" << endl << endl;
+    }
+    if (checkTime == "INVALID" || checkTime == "RENEW") {
+        cout << "Invalid ticket date!" << endl << endl;
+        return "mismatch!";
+    }*/
 
     return ticket.sessionKey;
 }
 
-string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const info& client, const string& iv, const string& priKeyV) {
+string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, ServiceServerData& service, info& client, const string& iv, const string& priKeyV) {
     vector<unsigned char> cipherBytes = hexStringToVector(encryptAuthenticator);
     vector<unsigned char> key_vec(priKeyV.begin(), priKeyV.end());
     vector<unsigned char> ivBytes(iv.begin(), iv.end());
+    bool sucess = true;
 
     vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key_vec, ivBytes);
 
@@ -49,10 +113,15 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const
 
     AuthenticatorC auth = parseAuthenticator(decryptedText);
 
+
     if (auth.clientID != client.getID()) {
+        sucess = false;
+        cout << "Invalid IDC in Authen!" << endl << endl;
         return "mismatch!";
     }
     if (auth.realmc != client.getRealm()) {
+        sucess = false;
+        cout << "Invalid RealmC in Authen!" << endl << endl;
         return "mismatch!";
     }
 
@@ -72,8 +141,15 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, const
     const int allowedSkewSeconds = 300; // 5 phút
     auto diff = chrono::duration_cast<chrono::seconds>(now - auth.TS2).count();
 
-    if (abs(diff) > allowedSkewSeconds) {
+    /*if (abs(diff) > allowedSkewSeconds) {
+        sucess = false;
+        cout << "Invalid time in Authen!" << endl << endl;
         return "mismatch!";
+    }*/
+
+    if (sucess) {
+        service.TS2 = auth.TS2;
+        service.seqNum = auth.seqNum;
     }
 
     return auth.subkey;
@@ -87,6 +163,8 @@ std::string createServerServiceMessage(const ServiceServerData& service, const s
     // Chuyển seqNum thành chuỗi
     std::ostringstream oss;
     oss << ts2Millisec << "|" << subKey << "|" << service.seqNum;
+
+    cout << endl << "Plaintext from V: " << oss.str() << endl;
 
     // Trả về chuỗi đã kết hợp
     return oss.str();
@@ -118,20 +196,23 @@ string encryptServerServiceData(const ServiceServerData& service, const string s
 }
 
 //Hàm chính của step 6
-string processServiceResponse(const ServiceServerData& service, const string& decryptMessage, const info& client, const string& ivTicket,
+string processServiceResponse(ServiceServerData& service, const string& decryptMessage, info& client, const string& ivTicket,
     const string& ivAuth, const string& priKeyV, string iv) {
     string cipherTicket, options, authen;
     string encryptMessage = "";
 
     splitAndAssign(decryptMessage, options, cipherTicket, authen);
 
-    string sessionKey = authenTicketAndTakeSessionKey(cipherTicket, client, ivAuth, priKeyV);
+    string sessionKey = authenTicketAndTakeSessionKey(cipherTicket, client, ivTicket, priKeyV);
     if (sessionKey == "mismatch!") return "Invalid information in Ticket!";
     else {
-        string subKey = authenAuthenticatorAndGetSubkey(authen, client, ivTicket, sessionKey);
+        string subKey = authenAuthenticatorAndGetSubkey(authen, service, client, ivAuth, sessionKey);
         if (subKey == "mismatch!") return "Invalid information in Authenticator!";
+        else if (!checkAPOptionsFromBitString(options)) {
+            encryptMessage = "Kerberos 5 authentication complete!";
+        }
         else {
-            encryptMessage = encryptServerServiceData(service, subKey, iv, sessionKey);
+            encryptMessage = encryptServerServiceData(service, subKey, iv, sessionKey) + "||" + iv;
         }
     }
 
@@ -143,7 +224,9 @@ int main() {
     SOCKET serviceSocket, clientSocket;
     sockaddr_in serviceAddr, clientAddr;
     int clientAddrLen = sizeof(clientAddr);
-    char buffer[1024];
+    char buffer[2048]; // Tăng kích thước nếu dữ liệu dài hơn
+    string priKeyV = "ThereIsAManOnSky"; // Khóa bí mật của Service Server (16 bytes)
+    string iv = generateRandomString();     // random IV để mã hóa phản hồi
 
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 
@@ -160,17 +243,57 @@ int main() {
     clientSocket = accept(serviceSocket, (sockaddr*)&clientAddr, &clientAddrLen);
     cout << "Client connected to Service Server.\n";
 
-    // Nhận Service Ticket
+    // Nhận tin nhắn chứa Ticket và Authenticator
     memset(buffer, 0, sizeof(buffer));
-    recv(clientSocket, buffer, sizeof(buffer), 0);
-    cout << "Received Service Ticket: " << buffer << "\n";
+    int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+    if (bytesReceived <= 0) {
+        cerr << "Error receiving data from client.\n";
+        closesocket(clientSocket);
+        closesocket(serviceSocket);
+        WSACleanup();
+        return 1;
+    }
 
-    // Gửi dịch vụ thực tế
-    string serviceData = "Welcome! Here is your service data.";
-    send(clientSocket, serviceData.c_str(), serviceData.length(), 0);
+    string decryptMessage(buffer);
+    cout << "Received encrypted service message: " << decryptMessage << "\n";
 
+    //Tách iv 
+    string ivAuth = "";  // IV để giải mã Authenticator
+    try {
+        ivAuth = extractAfterSecondDoublePipe(decryptMessage);
+    }
+    catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl << endl;
+    }
+    string ivTicket = ""; // IV để giải mã Ticket
+    try {
+        ivTicket = extractAfterFirstDoublePipe(decryptMessage);
+    }
+    catch (const exception& ex) {
+        cerr << "Error: " << ex.what() << endl << endl;
+    }
+
+    // Tạo đối tượng giả định client info
+    //info client("client123", "192.168.1.10", "REALM1", "", "");
+    info client("", "", "", "", "");
+
+    // Tạo dữ liệu dịch vụ
+    ServiceServerData service;
+
+    // Xử lý xác thực ticket + authenticator, tạo phản hồi
+    string response = processServiceResponse(service, decryptMessage, client, ivTicket, ivAuth, priKeyV, iv);
+
+    size_t pos = response.find('|');
+    if (pos != std::string::npos) cout << endl << "Encrypt mess: " << response << endl << endl;
+    else cout << endl << "Message to client: " << response << endl << endl;
+
+    // Gửi phản hồi
+    send(clientSocket, response.c_str(), response.length(), 0);
+
+    // Đóng socket
     closesocket(clientSocket);
     closesocket(serviceSocket);
     WSACleanup();
+
     return 0;
 }
