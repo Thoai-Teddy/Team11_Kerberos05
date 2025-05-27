@@ -281,6 +281,9 @@ int main() {
     }
     catch (exception& e) {
         std::cout << "Error: Log in failed!" << std::endl;
+
+        send_message(clientSocket, "WRONG PASSWORD!");
+
         closesocket(clientSocket);
         WSACleanup();
         //return -1;

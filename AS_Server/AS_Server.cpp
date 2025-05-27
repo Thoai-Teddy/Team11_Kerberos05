@@ -144,7 +144,6 @@ int main() {
     send_message(clientSocket, log_in_response);
 
     //======= Bước 1: Nhận yêu cầu xin cấp vé TGT của Client ======
-    std::cout << std::endl << "======= Buoc 1: Nhan yeu cau xin cap ve TGT cua Client ======" << std::endl;
 
     // Nhận yêu cầu ticket TGS từ client
     std::string ticket_request;
@@ -160,6 +159,16 @@ int main() {
         exit(-1);
     }
 
+    if (ticket_request == "WRONG PASSWORD!") {
+        std::cout << "LOG IN FAILED! WRONG PASSWORD!" << std::endl;
+        closesocket(clientSocket);
+        closesocket(asSocket);
+        WSACleanup();
+        //return -1;
+        exit(-1);
+    }
+
+    std::cout << std::endl << "======= Buoc 1: Nhan yeu cau xin cap ve TGT cua Client ======" << std::endl;
     std::cout << "Ticket request: " << ticket_request << std::endl;
 
     std::vector<std::string> ticket_parts = splitString(ticket_request, "|");
