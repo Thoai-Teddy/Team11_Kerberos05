@@ -19,10 +19,25 @@
 #include <bitset>
 #include <soci/soci.h>
 #include <soci/odbc/soci-odbc.h>
+#include <bitset>
+
 
 #pragma comment(lib, "Ws2_32.lib")
 
 using namespace std;
+
+// Định nghĩa Option và Flag:
+enum Option : uint32_t {
+    OP_NONE = 0,
+    OP_INITIAL = 1 << 0,
+    RENEW = 1 << 1
+};
+
+enum TicketFlag : uint32_t {
+    INITIAL = 1 << 0,
+    RENEWABLE = 1 << 1
+};
+
 
 class info {
 private:
@@ -46,6 +61,7 @@ public:
     std::string getAD() const;       
     std::string getRealm() const;  
     std::string getPublicKey() const; 
+    std::string getPrivateKey() const;
     void setPrivateKey(std::string privateKey);
     void setID(const std::string& newID) { id = newID; }
     void setAD(const std::string& newAD) { ad = newAD; }
@@ -195,12 +211,19 @@ std::string buildServiceTicketPlaintext(const std::string& flag,
 struct Ticket {
     std::string clientID;        // Thông tin định danh Client
     std::string flags;           // Các cờ (flags)
-    std::string sessionKey;      // Khóa phiên giữa Client và Server V
+    std::string sessionKey;      // Khóa phiên
     std::string clientAD;        // Thông tin định danh Client
     std::string realmc;
     std::string times_from;
     std::string times_till;
     std::string times_rtime;
+
+    Ticket() {};
+
+    Ticket(const std::string& clientID, const std::string& flags, const std::string& sessionKey, const std::string& clientAD, const std::string& realmc,
+        const std::string& times_from, const std::string& times_till, const std::string& times_rtime) :
+        clientID(clientID), flags(flags), sessionKey(sessionKey), clientAD(clientAD),
+        realmc(realmc), times_from(times_from), times_till(times_till), times_rtime(times_rtime) {};
 };
 
 
@@ -211,6 +234,8 @@ std::string generate_nonce(int length);
 std::string get_current_time_formatted();
 
 std::string build_times(int ticket_lifetime, int renew_lifetime);
+
+void set_rec_time_out(SOCKET sock, int milliseconds);
 
 void send_message(SOCKET sock, const std::string& message);
 
@@ -231,3 +256,10 @@ std::string check_ticket_time(std::string from, std::string till, std::string rt
 uint32_t createAPOptions(bool useSessionKey, bool mutualRequired);
 std::string apOptionsToBitString(uint32_t options); //trả về chuỗi nhị phân
 bool checkAPOptionsFromBitString(const std::string& bitStr); //check option in step 5
+
+//kiểm tra flag renewable
+bool hasRenewableFlag(const string& bitString);
+//kiểm tra nếu Option là RENEW
+bool isRenewOption(const std::string& bitString);
+// Tạo options cho bước 1
+uint32_t createOptions(bool initial, bool renew);

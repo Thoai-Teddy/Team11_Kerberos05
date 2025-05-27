@@ -92,6 +92,11 @@ std::string info::getPublicKey() const {
     return pub_key;
 };
 
+std::string info::getPrivateKey() const {
+    return pri_key;
+};
+
+
 void info::setPrivateKey(std::string privateKey) {
     this->pri_key = privateKey;
 }
@@ -811,20 +816,72 @@ std::string build_times(int ticket_lifetime, int renew_lifetime) {
     return from + "|" + till + "|" + rtime;
 }
 
+
 void send_message(SOCKET sock, const std::string& message)
 {
     send(sock, message.c_str(), message.size(), 0);
 }
 
+void set_rec_time_out(SOCKET sock, int milliseconds) {
+    DWORD timeout = milliseconds;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) < 0) {
+        throw std::runtime_error("Failed to set receive timeout.");
+    }
+}
+
 std::string receive_message(SOCKET sock) {
     char buffer[4096];
     int bytesReceived = recv(sock, buffer, sizeof(buffer), 0);
+
+    if (bytesReceived == 0) {
+        throw std::runtime_error("Connection close by the peer.");
+    }
+
     if (bytesReceived == SOCKET_ERROR) {
-        throw std::runtime_error("Receive failed");
+        int errorCode = WSAGetLastError();
+        if (errorCode == WSAETIMEDOUT) {
+            throw std::runtime_error("Receive timeout occurred.");
+        }
+        else {
+            throw std::runtime_error("Receive failed with error code - " + std::to_string(errorCode));
+        }
     }
     return std::string(buffer, bytesReceived);
 }
 
+/*
+std::string receive_message(SOCKET sock) {
+    char buffer[4096];
+    int bytesReceived = recv(sock, buffer, sizeof(buffer), 0);
+    if (bytesReceived == SOCKET_ERROR) {
+        //throw std::runtime_error("Receive failed");
+        std::cout << "RECEIVE MESSAGE FAILED!" << std::endl;
+        return "RECEIVE MESSAGE FAILED!";
+    }
+    return std::string(buffer, bytesReceived);
+}
+*/
+
+/*
+void send_message(SOCKET sock, const std::string& message)
+{
+    std::string msg = message + "\n";
+    send(sock, msg.c_str(), msg.size(), 0);
+}
+
+std::string receive_message(SOCKET sock) {
+    std::string result;
+    char ch;
+    int bytesReceived;
+    while (true) {
+        bytesReceived = recv(sock, &ch, 1, 0);
+        if (bytesReceived <= 0) break; // Lỗi hoặc đóng kết nối
+        if (ch == '\n') break;         // Kết thúc message
+        result += ch;
+    }
+    return result;
+}
+*/
 
 // Hàm tạo chuỗi 16 ký tự ngẫu nhiên (dùng để tạo key và iv)
 std::string generateRandomString(size_t length) {
@@ -863,6 +920,7 @@ std::string extractAfterFirstDoublePipe(std::string& input) {
 
     return result;
 }
+
 std::string extractAfterSecondDoublePipe(std::string& input) {
     size_t last = input.rfind("||");
     if (last == std::string::npos)
@@ -883,12 +941,12 @@ std::string create_ticket_time(int ticket_lifetime, int renew_lifetime) {
     std::time_t from_c = std::chrono::system_clock::to_time_t(from_time);
 
     // Till = From + ticket_lifetime tiếng (ticket có thể dùng trong ticket_lifetime tiếng)
-    auto till_time = std::chrono::system_clock::now() + std::chrono::hours(ticket_lifetime);
+    auto till_time = std::chrono::system_clock::now() + std::chrono::minutes(ticket_lifetime);
     std::time_t till_c = std::chrono::system_clock::to_time_t(till_time);
 
 
     // Rtime = Till + renew_lifetime tiếng (vé có thể gia hạn thêm renew_lifetime tiếng)
-    auto rtime_time = till_time + std::chrono::hours(renew_lifetime);
+    auto rtime_time = till_time + std::chrono::minutes(renew_lifetime);
     std::time_t rtime_c = std::chrono::system_clock::to_time_t(rtime_time);
 
     // Ghép lại thành Times
@@ -905,7 +963,7 @@ std::string check_ticket_time(std::string from, std::string till, std::string rt
 
     if (now_c >= from_c && now_c <= till_c)
         return "VALID";
-    if (now_c > till_c && now_c < rtime_c)
+    else if (now_c >= till_c && now_c <= rtime_c)
         return "RENEW";
     else
         return "INVALID";
@@ -920,10 +978,12 @@ uint32_t createAPOptions(bool useSessionKey, bool mutualRequired) {
         options |= MUTUAL_REQUIRED;
     return options;
 }
+
 std::string apOptionsToBitString(uint32_t options) {
     std::bitset<32> bits(options);
     return bits.to_string(); // trả về chuỗi nhị phân dạng "011000...000"
 }
+
 bool checkAPOptionsFromBitString(const std::string& bitStr) {
     if (bitStr.length() != 32) {
         std::cerr << "Lỗi: Chuỗi APOptions không hợp lệ. Phải có 32 bit.\n";
@@ -939,4 +999,35 @@ bool checkAPOptionsFromBitString(const std::string& bitStr) {
     bool mutualRequired = (options & MUTUAL_REQUIRED) != 0;
 
     return (useSessionKey && mutualRequired);
+}
+
+//kiểm tra flag renewable
+bool hasRenewableFlag(const std::string& bitString) {
+    // Kiểm tra độ dài chuỗi phải là 32 ký tự (bitset<32>)
+    if (bitString.length() != 32) return false;
+
+    // RENEWABLE nằm ở bit số 30 từ trái sang phải (bit số 1 từ phải sang nếu tính theo giá trị enum)
+    // Do std::bitset tạo chuỗi từ MSB -> LSB, ta cần truy cập đúng vị trí
+    // Bit thấp nhất (LSB - vị trí 31) là bit 0 => RENEWABLE = 1 << 1 => vị trí 30
+    return bitString[30] == '1';
+}
+
+//kiểm tra nếu Option là RENEW
+bool isRenewOption(const std::string& bitString) {
+    // Kiểm tra độ dài hợp lệ
+    if (bitString.length() != 32) return false;
+
+    // RENEW = 1 << 1 → bit số 1 → tương ứng vị trí 30 trong chuỗi
+    // Vì std::bitset<32> tạo chuỗi theo thứ tự từ MSB đến LSB (bit 31 xuống bit 0)
+    return bitString[30] == '1';
+}
+
+// Tạo option cho bước 1
+uint32_t createOptions(bool initial, bool renew) {
+    uint32_t options = 0;
+    if (initial)
+        options |= OP_INITIAL; //OR
+    if (renew)
+        options |= RENEW;
+    return options;
 }
