@@ -50,19 +50,16 @@ string decryptTicketV(const string& encryptTicket, const string& iv, const strin
     // Bước 4: Bỏ padding để lấy chuỗi gốc
     string decryptedText = unpadString(decryptedBytes);
 
-    cout << endl << "DECRYPT TICKET V: " << decryptedText << endl << endl;
+    cout << endl << "[DECRYPT]\n[EXPIRED TICKET V]: " << decryptedText << endl << endl;
 
     // Bước 5: Parse ServiceTicket
     ServiceTicket ticket = parseServiceTicket(decryptedText);
     if (!hasRenewableFlag(ticket.flags)) {
         response = "This ticket can not renewable!";
+        cout << endl << "[ALERT]\n" << response << endl << endl;
     }
-    else cout << endl << response << endl << endl;
-
     return response;
 }
-
-
 
 string decryptAuthenticatorc(const string& Mess, const string& Kc_tgs, const string& iv_authen) {
     vector<unsigned char> cipherBytes = hexStringToVector(Mess);
@@ -142,7 +139,7 @@ int main() {
             return -1;
         }
         else {
-            std::cout << "Received data from Client: " << buffer << std::endl;
+            std::cout << "[Client -> TGS]: " << buffer << std::endl << endl;
         }
 
         // Lấy iv để giải mã TGS ticket
@@ -178,18 +175,15 @@ int main() {
 
         std::string options_from_client, ticket_v_from_client, iv_v_from_client;
 
-        cout << endl << "txt origin:" << txt << endl;
-
         extractOptionAndTicket(txt, options_from_client, ticket_v_from_client, iv_v_from_client);
 
-        cout << endl << "txt after: " << txt << endl << endl
-            << "ticket: " << ticket_v_from_client << endl
-            << "iv_v: " << iv_v_from_client << endl
-            << "K_v: " << K_v << endl;
-
+        if (!ticket_v_from_client.empty()) {
+            cout << endl << "[EXPIRED TICKET V]: " << ticket_v_from_client << endl;
+        }
+        
         if (count != 0 && !isRenewOption(options_from_client)) {
             string response = "You have been issued a ticket!";
-            cout << "Response from server: " << response << endl << endl;
+            cout << "[ALERT]\n[TGS -> Client]: " << response << endl << endl;
             send_message(clientSocket, response);
             break;
         }
@@ -213,20 +207,19 @@ int main() {
             authenticatorc_from_client += client_request_vector[i];
             //cout << endl << "Authen: " << authenticatorc_from_client << endl << endl;
         }
-        cout << endl << "Response: " << txt << endl << endl;
-        cout << "Received Authenticatorc: " << authenticatorc_from_client << endl << endl;
+        cout << endl << "Received Authenticatorc: " << authenticatorc_from_client << endl << endl;
 
 
 
         std::string now = get_current_time_formatted();
         if (now > times_rtime_from_client)
         {
-            string error = "Cannot create V ticket!Ticket has expired!";
+            string error = "Cannot create V ticket! Ticket has expired!";
             cout << error << endl << endl;
             send_message(clientSocket, error);
         }
 
-        cout << "Received Ticket TGS: " << ticket_tgs_from_client << "\n";
+        cout << "Received Ticket TGS: " << ticket_tgs_from_client << "\n\n";
 
         //Giải mã Ticket TGS
         std::vector<unsigned char>  ticket_tgs_from_client_vector = hexStringToVector(ticket_tgs_from_client);
@@ -241,10 +234,7 @@ int main() {
 
         string plaintext_from_as = unpadString(plaintext_block_from_as);
 
-
-
-        cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_as << endl << endl;
-
+        cout << "[DECRYPT]\n[TGT]: " << plaintext_from_as << endl << endl;
 
         vector <std::string> parts_plaintext_from_as = splitString(plaintext_from_as, "|");
 
@@ -260,7 +250,7 @@ int main() {
 
         std::string authenticatorc_decrypt = decryptAuthenticatorc(authenticatorc_from_client, TGS_ticket.sessionKey, iv_authen);
 
-        cout << "Received Authenticatorc: " << authenticatorc_decrypt << "\n";
+        cout << "[DECRYPT]\n[Authenticatorc]: " << authenticatorc_decrypt << "\n";
 
         AuthenticatorC authenticator_de = parseAuthenticator(authenticatorc_decrypt);
 
@@ -313,7 +303,7 @@ int main() {
 
 
         // Padding plaintext
-        cout << endl << "PLAINTEXT TICKET V:" << Ticket_V_plaintext << endl << endl;
+        cout << endl << "TICKET V:" << Ticket_V_plaintext << endl << endl;
         vector<unsigned char> padded_Ticket_V_plaintext = padString(Ticket_V_plaintext);
         vector<unsigned char> padded_plaintext = padString(plaintext);
 
@@ -339,15 +329,13 @@ int main() {
         vector<unsigned char> Ticket_V_encrypted = aes_cbc_encrypt(padded_Ticket_V_plaintext, Key_v, iv_v_ticket);
         string  Ticket_V_encrypted_str = bytesToHex(Ticket_V_encrypted);
 
-        cout << "Ticket V (encrypted by K_v): " << Ticket_V_encrypted_str << endl << endl;
+        cout << "[ENCRYPT]\n[Ticket V]: " << Ticket_V_encrypted_str << endl << endl;
 
         vector<unsigned char> cipherBytes = hexStringToVector(Ticket_V_encrypted_str);
         vector<unsigned char> key(K_v.begin(), K_v.end());
         vector<unsigned char> ivBytes(iv_pre_v_ticket.begin(), iv_pre_v_ticket.end());
         vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key, ivBytes);
         string decryptedText = unpadString(decryptedBytes);
-
-        cout << "DECRYPT MESS: " << decryptedText << endl << endl;
 
         // Mã hóa plaintext
         std::string K_c_tgs = TGS_ticket.sessionKey;
@@ -370,12 +358,12 @@ int main() {
         vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, Key_c_tgs, iv_v);
         string ciphertext_str = bytesToHex(ciphertext);
 
-        cout << "Ciphertext (encrypted by K_c_tgs): " << ciphertext_str << endl << endl;
+        cout << "[ENCRYPT]\n[Message to Client]: " << ciphertext_str << endl << endl;
 
 
         // Gửi dữ liệu về cho client
         string response = Ticket_V.realmc + "|" + Ticket_V.clientID + "|" + Ticket_V_encrypted_str + "||" + iv_pre_v_ticket + "|" + ciphertext_str + "||" + iv_pre_v;
-        cout << "Response from server: " << response << endl << endl;
+        cout << "[TGS -> Client]: " << response << endl << endl;
         send_message(clientSocket, response);
 
         // Gửi Service Ticket

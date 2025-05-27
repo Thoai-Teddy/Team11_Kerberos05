@@ -105,13 +105,14 @@ void processTGSResponse(
 
     vector<unsigned char> authenticator_en_vec = aes_cbc_encrypt(authenticator_vec, kcv_vec, iv_vec);
     string authenticator_en = bytesToHex(authenticator_en_vec);
-    cout << "authenticator: " << authenticator << endl;
+    cout << endl << "[AUTHENTICATOR]: " << authenticator << endl << endl;
 
     uint32_t apOptions = createAPOptions(true, true);
     string OPTION = apOptionsToBitString(apOptions);
 
     // Tạo message gửi tới Server V
     string message = OPTION + "|" + ticketV + "||" + iv_ticketV + "|" + authenticator_en + "||" + iv;
+    cout << "[Client -> V]: " << message << endl << endl;
 
     // Gửi nếu cần
     sendToServer(clientSocket, message);
@@ -227,7 +228,7 @@ int main() {
         return -1;
     }
 
-    std::cout << "Response log in from AS: " << response_log_in_from_as << std::endl;
+    std::cout << "Response log in from AS: " << response_log_in_from_as << endl << endl;
     if (response_log_in_from_as == "INVALID USERNAME!") {
         std::cout << "Error: Username is not exist!" << std::endl;
         closesocket(clientSocket);
@@ -239,17 +240,13 @@ int main() {
     std::vector <std::string> log_in_response_part = splitString(response_log_in_from_as, "|");
     std::string log_in_ciphertext = log_in_response_part[0];
     std::string log_in_iv = log_in_response_part[1];
-    std::cout << "Log in ciphertext: " << log_in_ciphertext << std::endl;
-    std::cout << "Log in iv: " << log_in_iv << std::endl;
 
     // Hashpassword để lấy key giải mã
     std::string hashed_pass = sha1(password);
-    std::cout << "Hashed pass: " << hashed_pass << std::endl;
 
     if (hashed_pass.size() > BLOCK_SIZE) {
         hashed_pass = hashed_pass.substr(0, BLOCK_SIZE);
     }
-    std::cout << "Hashed pass after substr: " << hashed_pass << std::endl;
 
     vector<unsigned char> hashed_pass_vec(hashed_pass.begin(), hashed_pass.end());
     while (hashed_pass_vec.size() < BLOCK_SIZE) hashed_pass_vec.push_back(0x00);
@@ -259,8 +256,6 @@ int main() {
     if (log_in_iv.size() > BLOCK_SIZE) {
         log_in_iv = log_in_iv.substr(0, BLOCK_SIZE);
     }
-
-    std::cout << "Log in IV after substr: " << log_in_iv << std::endl;
 
     std::vector<unsigned char> log_in_iv_vec(log_in_iv.begin(), log_in_iv.end());
     while (log_in_iv_vec.size() < BLOCK_SIZE) log_in_iv_vec.push_back(0x00);
@@ -286,7 +281,7 @@ int main() {
     }
 
     string log_in_plaintext = unpadString(log_in_plaintext_vec);
-    std::cout << "Log in successfully." << std::endl;
+    std::cout << "Log in successfully!" << std::endl;
 
     // Thông tin client
     std::string realm_c = "Kerberos05.com";
@@ -307,7 +302,7 @@ int main() {
 
     std::string request_tgt = options + "|" + client.getID() + "|" + client.getRealm() + "|" + serverTGS.getID() + "|" + times + "|" + nonce1;
 
-    std::cout << "Sending Request To AS: " << request_tgt << std::endl << std::endl;
+    std::cout << "[Client -> AS]: " << request_tgt << std::endl << std::endl;
     // Gửi request xin cấp vé đến AS
     send_message(clientSocket, request_tgt);
 
@@ -325,7 +320,7 @@ int main() {
         WSACleanup();
         return -1;
     }
-    std::cout << "Response From AS About TGT: " << response_from_as << std::endl << std::endl;
+    std::cout << "[AS -> Client]: " << response_from_as << std::endl << std::endl;
 
     if (response_from_as == "WRONG ID!") {
         std::cout << "Error: Wrong id!" << std::endl;
@@ -383,7 +378,8 @@ int main() {
     std::vector<unsigned char> plaintext_vec_from_as = aes_cbc_decrypt(ciphertext_vec_from_as, hashed_pass_vec, iv_vector_for_message_from_as);
     std::string plaintext_from_as = unpadString(plaintext_vec_from_as);
 
-    std::cout << "Plaintext after decrypted with K_c: " << plaintext_from_as << std::endl << std::endl;
+    cout << "[DECRYPT]\n";
+    std::cout << "[Message from AS]: " << plaintext_from_as << std::endl << std::endl;
 
     std::vector <std::string> plaintext_parts_from_as = splitString(plaintext_from_as, "|");
 
@@ -438,18 +434,18 @@ int main() {
     do {
         renewable = false;
         string iv_authen = generateRandomString();
-        cout << "iv_authen: " << iv_authen << endl << endl;
         string encrypted_authenticator = encryptAuthenticatorc(Authenticatorc, K_c_tgs, iv_authen);
         if (count == 0) {
             Option = OP_NONE;
 
             message_to_tgs = apOptionsToBitString(Option) + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + encrypted_authenticator + "||" + iv_authen;
-            cout << "Sending message to TGS: " << message_to_tgs << endl << endl;
+            cout << "[Client -> TGS]: " << message_to_tgs << endl << endl;
         }
         else {
             Option = RENEW;
             message_to_tgs = apOptionsToBitString(Option) + "##" + ticket_v_from_tgs + "##" + iv_ticket_v + "|" + serverV.getID() + "|" + Times + "|" + Nonce2 + "|" + Ticket_TGS + "||" + iv_tgs + "|" + encrypted_authenticator + "||" + iv_authen;
-            cout << "Sending message to TGS " << "(" << count << " times) : " << message_to_tgs << endl << endl;
+            cout << "[REQUEST RENEW]\n";
+            cout << "[Client -> TGS]: " << message_to_tgs << endl << endl;
         }
 
         send_message(clientSocket, message_to_tgs);
@@ -460,7 +456,7 @@ int main() {
         memset(buffer, 0, sizeof(buffer)); // Clear buffer
         bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
         if (bytesReceived > 0) {
-            cout << "Received Service Ticket: " << buffer << endl << endl;
+            cout << "[TGS -> Client]: " << buffer << endl << endl;
         }
 
         string trueRes(buffer);
@@ -497,15 +493,11 @@ int main() {
 
 
         // Tách dữ liệu mà server trả về
-        //string response_tgs(buffer);
         string response_tgs = trueRes;
-        cout << "Response From TGS:" << response_tgs << endl << endl;
         // Tách iv để giải mã plaintext
-        //string iv_pre_v = "ImAloneAndAboutY";
         string iv_pre_v = "";
         try {
             iv_pre_v = extractAfterSecondDoublePipe(response_tgs);
-            cout << "iv_pre_v: " << iv_pre_v << endl;
         }
         catch (const exception& ex) {
             cerr << "Error: " << ex.what() << endl << endl;
@@ -554,7 +546,8 @@ int main() {
 
         vector<unsigned char> plaintext_block_from_tgs = aes_cbc_decrypt(ciphertext_block_from_tgs, Key_c_tgs, iv_v);
         string plaintext_from_tgs = unpadString(plaintext_block_from_tgs);
-        cout << "Plaintext after decrypted with K_c_tgs: " << plaintext_from_tgs << endl << endl;
+        cout << "[DECRYPT]\n";
+        cout << "[Message from TGS]: " << plaintext_from_tgs << endl << endl;
 
         vector <string> parts_plaintext_from_tgs = splitString(plaintext_from_tgs, "|");
 
@@ -583,9 +576,10 @@ int main() {
         std::string rtime_str = timeToString(rtime_t);
         std::string from_str = timeToString(from_t);
         std::string till_str = timeToString(till_t);
-        std::cout << "Display FROM  : " << from_str << '\n';
-        std::cout << "Display TILL  : " << till_str << '\n';
-        std::cout << "Display RTIME  : " << rtime_str << '\n';
+        cout << "[DISPLAY TIME OF TICKET V]\n";
+        std::cout << "FROM  : " << from_str << '\n';
+        std::cout << "TILL  : " << till_str << '\n';
+        std::cout << "RTIME : " << rtime_str << '\n';
 
         string checkT = check_ticket_time(from_time_from_tgs, till_time_from_tgs, rtime_time_from_tgs);
         if (checkT == "RENEW") {
@@ -616,9 +610,6 @@ int main() {
 
     string iv_client_to_server = generateRandomString();
 
-    cout << "iv_ticket_v: " << iv_ticket_v << endl;
-    cout << "iv_c_t_s: " << iv_client_to_server << endl;
-
     processTGSResponse(ticket_v_from_tgs, iv_ticket_v, K_c_v, from_time_from_tgs, till_time_from_tgs, realm_v_from_tgs, id_v_from_tgs, client, serverV, iv_client_to_server);
 
     // Nhận dữ liệu phản hồi từ Service Server
@@ -628,7 +619,7 @@ int main() {
         string s(buffer);
         size_t pos = s.find('|');
         if (pos != std::string::npos) {
-            cout << endl << "Receive from V: " << buffer << endl;
+            cout << endl << "[V -> Client]: " << buffer << endl;
 
 
             string iv_from_V = "";
@@ -641,10 +632,11 @@ int main() {
 
             string decryptedText = decryptMessFromV(s, K_c_v, iv_from_V);
 
-            cout << endl << "Decrypt Mess from V: " << decryptedText << endl;
-            cout << endl << "Kerberos 5 authentication complete!" << endl << endl;
+            cout << "[DECRYPT]\n";
+            cout << endl << "[Message from V]: " << decryptedText << endl;
+            cout << endl << "=================== KERBEROS 5 AUTHENTICATION COMPLETE! ====================" << endl << endl;
         }
-        else cout << endl << "Receive from V: " << buffer << endl;
+        else cout << endl << "[V -> Client]: " << buffer << endl << endl;
     }
     else {
         cerr << "No response or error receiving from Service Server." << endl;

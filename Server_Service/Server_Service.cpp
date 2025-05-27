@@ -16,13 +16,14 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     // Bước 4: Bỏ padding để lấy chuỗi gốc
     string decryptedText = unpadString(decryptedBytes);
 
-    cout << "DECRYPT TICKET V: " << decryptedText << endl << endl;
+    cout << "\n[DECRYPT]\n[TICKET V]: " << decryptedText << endl << endl;
 
     // Bước 5: Parse ServiceTicket
     ticket = parseServiceTicket(decryptedText);
 
-    cout << "IDC: " << ticket.clientID << endl
-        << "ADC: " << ticket.clientAD << endl
+    cout << "[Client info from Ticket V]\n";
+    cout << "IDC   : " << ticket.clientID << endl
+        << "ADC   : " << ticket.clientAD << endl
         << "RealmC: " << ticket.realmc << endl;
 
     // Bước 6: Xác thực
@@ -30,7 +31,7 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     soci::session sql(soci::odbc,
         "Driver={SQL Server};Server=ADMIN-PC\\SQLSERVER;Database=SERVERV;Trusted_Connection=Yes;");
 
-    std::cout << "Kết nối thành công tới SERVERV!\n";
+    std::cout << "Successfully connect to Database SERVERV!\n";
 
     std::string realm, address;
 
@@ -43,19 +44,16 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     // Kiểm tra kết quả và gán giá trị nếu hợp lệ
     st.execute();
     if (st.fetch() && indRealm == soci::i_ok && indAddress == soci::i_ok) {
-        cout << "AD from DB: " << address << endl
-            << "RealmC from DB: " << realm << endl << endl;
         client.setID(ticket.clientID);
         client.setAD(address);
         client.setRealm(realm);
     }
 
     if (client.getID() != "") {
-        std::cout << "Found client:\n";
-        std::cout << "ID: " << client.getID() << "\n";
-        std::cout << "ADC: " << client.getAD() << "\n";
+        std::cout << "\n[Found Client from DB]\n";
+        std::cout << "ID   : " << client.getID() << "\n";
+        std::cout << "ADC  : " << client.getAD() << "\n";
         std::cout << "Realm: " << client.getRealm() << "\n\n";
-        cout << "ticket.realmc:" << ticket.realmc << endl << endl;
 
         if (client.getAD() != ticket.clientAD) {
             cout << "Invalid ADC!" << endl << endl;
@@ -121,9 +119,9 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, Servi
     std::string ts2_str = timeToString(ts2_time);
     std::string from_str = timeToString(from);
     std::string till_str = timeToString(till);
-    std::cout << "Display FROM  : " << from_str << '\n';
-    std::cout << "Display TILL  : " << till_str << '\n';
-    std::cout << "Display TS2  : " << ts2_str << '\n';
+    std::cout << "[DISPLAY]\nFROM  : " << from_str << '\n';
+    std::cout << "TILL  : " << till_str << '\n';
+    std::cout << "TS2   : " << ts2_str << '\n';
 
     if (ts2_time < from || ts2_time > till) {
         sucess = false;
@@ -151,7 +149,7 @@ std::string createServerServiceMessage(const ServiceServerData& service, const s
     std::ostringstream oss;
     oss << ts2Millisec << "|" << subKey << "|" << service.seqNum;
 
-    cout << endl << "Plaintext from V: " << oss.str() << endl;
+    cout << endl << "[Message to Cient]: " << oss.str() << endl;
 
     // Trả về chuỗi đã kết hợp
     return oss.str();
@@ -243,7 +241,7 @@ int main() {
     }
 
     string decryptMessage(buffer);
-    cout << "Received encrypted service message: " << decryptMessage << "\n";
+    cout << endl << "[Client -> V]: " << decryptMessage << "\n";
 
     //Tách iv 
     string ivAuth = "";  // IV để giải mã Authenticator
@@ -272,8 +270,8 @@ int main() {
     string response = processServiceResponse(service, decryptMessage, client, ivTicket, ivAuth, priKeyV, iv);
 
     size_t pos = response.find('|');
-    if (pos != std::string::npos) cout << endl << "Encrypt mess: " << response << endl << endl;
-    else cout << endl << "Message to client: " << response << endl << endl;
+    if (pos != std::string::npos) cout << endl << "[ENCRYPT]\n[V -> Client]: " << response << endl << endl;
+    else cout << endl << "[ALERT]\n[V -> Client]: " << response << endl << endl;
 
     // Gửi phản hồi
     send(clientSocket, response.c_str(), response.length(), 0);

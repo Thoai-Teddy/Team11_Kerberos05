@@ -55,22 +55,6 @@ int main() {
     }
     std::cout << "Client connected." << std::endl;
 
-    /*
-    int milliseconds = 15000; // 15 giây
-
-    // Cài đặt thời gian cho việc nhận message của socket
-    try {
-        set_rec_time_out(clientSocket, milliseconds);
-    }
-    catch (const std::exception& e) {
-        std::cout << "Error: " << e.what() << std::endl;
-        closesocket(clientSocket);
-        //continue;
-
-        closesocket(asSocket);
-        WSACleanup();
-    }
-    */
 
     //================ Dang nhap ================
     std::cout << std::endl << "================ Dang nhap ================" << std::endl;
@@ -86,7 +70,7 @@ int main() {
         //return -1;
         exit(-1);
     }
-    std::cout << "Login username from client: " << login_username << std::endl;
+    std::cout << "[LOGIN]\n[Client -> AS]: " << login_username << std::endl;
 
     // Truy vấn password từ database
     std::string hashed_pass_db;
@@ -133,7 +117,7 @@ int main() {
 
     std::string log_in_response = username_encrypted_str + "|" + iv_log_in;
 
-    std::cout << "Log in ciphertext sent to client: " << log_in_response << std::endl;
+    std::cout << "[AS -> Client]: " << log_in_response << std::endl;
 
     send_message(clientSocket, log_in_response);
 
@@ -163,7 +147,7 @@ int main() {
     }
 
     std::cout << std::endl << "======= Buoc 1: Nhan yeu cau xin cap ve TGT cua Client ======" << std::endl;
-    std::cout << "Ticket request: " << ticket_request << std::endl;
+    std::cout << "[Client -> AS]: " << ticket_request << std::endl;
 
     std::vector<std::string> ticket_parts = splitString(ticket_request, "|");
     if (ticket_parts.size() < 8) {
@@ -252,7 +236,6 @@ int main() {
         exit(-1);
     }
 
-    std::cout << "K_tgs from database: " << ktgs << std::endl;
     std::cout << "Realm_tgs from database: " << realmtgs << std::endl;
 
     info TGS(idtgs, "", realmtgs, "", ktgs);
@@ -261,8 +244,7 @@ int main() {
     if (ktgs.size() > BLOCK_SIZE) {
         ktgs = ktgs.substr(0, BLOCK_SIZE);
     }
-    std::cout << "K_tgs after substr: " << ktgs << std::endl;
-
+    
     vector<unsigned char> K_tgs_vec(ktgs.begin(), ktgs.end());
     while (K_tgs_vec.size() < BLOCK_SIZE) K_tgs_vec.push_back(0x00);
 
@@ -272,7 +254,6 @@ int main() {
 
     // Tạo iv để mã hóa TGS ticket
     string iv_pre_tgs_ticket = generateRandomString(BLOCK_SIZE);
-    std::cout << "IV pre tgs ticket: " << iv_pre_tgs_ticket << std::endl;
 
     if (iv_pre_tgs_ticket.size() > BLOCK_SIZE) {
         iv_pre_tgs_ticket = iv_pre_tgs_ticket.substr(0, BLOCK_SIZE);
@@ -280,11 +261,8 @@ int main() {
     vector<unsigned char> iv_tgs_ticket(iv_pre_tgs_ticket.begin(), iv_pre_tgs_ticket.end());
     while (iv_tgs_ticket.size() < BLOCK_SIZE) iv_tgs_ticket.push_back(0x00); // Bổ sung nếu thiếu
 
-    std::cout << "Create iv success" << std::endl;
-
     // Tạo iv để mã hóa với K_c
     string iv_pre = generateRandomString(BLOCK_SIZE);
-    std::cout << "IV pre for AS message: " << iv_pre << std::endl;
 
     if (iv_pre.size() > BLOCK_SIZE) {
         iv_pre = iv_pre.substr(0, BLOCK_SIZE);
@@ -306,12 +284,12 @@ int main() {
     std::string TGS_ticket_plaintext = TGS_ticket.flags + "|" + TGS_ticket.sessionKey + "|" + TGS_ticket.realmc + "|" + TGS_ticket.clientID + "|"
         + TGS_ticket.clientAD + "|" + TGS_ticket.times_from + "|" + TGS_ticket.times_till + "|" + TGS_ticket.times_rtime;
 
-    std::cout << "TGS ticket plaintext: " << TGS_ticket_plaintext << std::endl << std::endl;
+    std::cout << endl << "[TGT]: " << TGS_ticket_plaintext << std::endl << std::endl;
 
     // Tạo plaintext mã hóa bằng K_c
     std::string plaintext = K_c_tgs + "|" + t_from + "|" + t_till + "|" + t_rtime + "|"
         + nonce1 + "|" + TGS.getRealm() + "|" + TGS.getID();
-    std::cout << "Plaintext to encrypt by K_c: " << plaintext << std::endl << std::endl;
+    std::cout << "[Message to Client]: " << plaintext << std::endl << std::endl;
 
     // Padding plaintext
     vector<unsigned char> padded_TGS_ticket_plaintext = padString(TGS_ticket_plaintext);
@@ -320,20 +298,16 @@ int main() {
     // Mã hóa
     vector<unsigned char> TGS_ticket_encrypted = aes_cbc_encrypt(padded_TGS_ticket_plaintext, K_tgs_vec, iv_tgs_ticket);
     string TGS_ticket_encrypted_str = bytesToHex(TGS_ticket_encrypted);
-    std::cout << "TGS Ticket (encrypted by K_tgs): " << TGS_ticket_encrypted_str << std::endl << std::endl;
+    std::cout << "[ENCRYPT]\n[TGT]: " << TGS_ticket_encrypted_str << std::endl << std::endl;
 
     vector<unsigned char> ciphertext = aes_cbc_encrypt(padded_plaintext, key_client_vec, iv);
     string ciphertext_str = bytesToHex(ciphertext);
-    std::cout << "Ciphertext (encrypted by K_c): " << ciphertext_str << std::endl << std::endl;
+    std::cout << "[ENCRYPT]\n[MESSAGE]" << ciphertext_str << std::endl << std::endl;
 
     // Gửi dữ liệu về cho client
     string response = client.getRealm() + "|" + client.getID() + "|" + TGS_ticket_encrypted_str + "|" + iv_pre_tgs_ticket + "|" + ciphertext_str + "|" + iv_pre;
-    std::cout << "Message sent to client: " << response << std::endl << std::endl << std::endl;
+    std::cout << "[AS -> Client]: " << response << std::endl << std::endl << std::endl;
     send_message(clientSocket, response);
-
-    vector<unsigned char> TGS_plaintext_decrypted_vec = aes_cbc_decrypt(TGS_ticket_encrypted, K_tgs_vec, iv_tgs_ticket);
-    string TGS_plaintext_decrypted = unpadString(TGS_plaintext_decrypted_vec);
-    std::cout << "Ticket TGS after decrypted with K_tgs: " << TGS_plaintext_decrypted << std::endl << std::endl;
 
     closesocket(clientSocket);
     closesocket(asSocket);
