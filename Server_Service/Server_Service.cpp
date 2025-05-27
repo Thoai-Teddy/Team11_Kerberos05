@@ -28,13 +28,7 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     // Bước 6: Xác thực
     //Connect to DB SQL Server
     soci::session sql(soci::odbc,
-        "Driver={ODBC Driver 17 for SQL Server};"
-        "Server=DESKTOP-UE4ET37;"
-        "Database=SERVERV;"
-        "Uid=sa;"
-        "Pwd=211038;"
-        "TrustServerCertificate=Yes;"
-        "Encrypt=Yes;");
+        "Driver={SQL Server};Server=ADMIN-PC\\SQLSERVER;Database=SERVERV;Trusted_Connection=Yes;");
 
     std::cout << "Kết nối thành công tới SERVERV!\n";
 
@@ -57,10 +51,11 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     }
 
     if (client.getID() != "") {
-        std::cout << "Tìm thấy client:\n";
+        std::cout << "Found client:\n";
         std::cout << "ID: " << client.getID() << "\n";
         std::cout << "ADC: " << client.getAD() << "\n";
         std::cout << "Realm: " << client.getRealm() << "\n\n";
+        cout << "ticket.realmc:" << ticket.realmc << endl << endl;
 
         if (client.getAD() != ticket.clientAD) {
             cout << "Invalid ADC!" << endl << endl;
@@ -78,10 +73,10 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     time_t rtime = chrono::system_clock::to_time_t(ticket.timeInfo.rtime);
     time_t t_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-    std::cout << "Thời gian FROM  : " << std::put_time(std::localtime(&from), "%Y/%m/%d %H:%M:%S") << '\n';
-    std::cout << "Thời gian TILL  : " << std::put_time(std::localtime(&till), "%Y/%m/%d %H:%M:%S") << '\n';
-    std::cout << "Thời gian RTIME : " << std::put_time(std::localtime(&rtime), "%Y/%m/%d %H:%M:%S") << '\n';
-    std::cout << "Thời gian NOW   : " << std::put_time(std::localtime(&t_now), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Display FROM  : " << std::put_time(std::localtime(&from), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Display TILL  : " << std::put_time(std::localtime(&till), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Display RTIME : " << std::put_time(std::localtime(&rtime), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "Display NOW   : " << std::put_time(std::localtime(&t_now), "%Y/%m/%d %H:%M:%S") << '\n';
 
     string checkTime = check_ticket_time(to_string(from), to_string(till), to_string(rtime));
     if (checkTime == "VALID") {
@@ -126,9 +121,9 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, Servi
     std::string ts2_str = timeToString(ts2_time);
     std::string from_str = timeToString(from);
     std::string till_str = timeToString(till);
-    std::cout << "Thời gian FROM  : " << from_str << '\n';
-    std::cout << "Thời gian TILL  : " << till_str << '\n';
-    std::cout << "Thời gian TS2  : " << ts2_str << '\n';
+    std::cout << "Display FROM  : " << from_str << '\n';
+    std::cout << "Display TILL  : " << till_str << '\n';
+    std::cout << "Display TS2  : " << ts2_str << '\n';
 
     if (ts2_time < from || ts2_time > till) {
         sucess = false;

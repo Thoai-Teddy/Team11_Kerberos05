@@ -85,10 +85,6 @@ std::string info::getPublicKey() const {
     return pub_key;
 };
 
-std::string info::getPrivateKey() const {
-    return pri_key;
-};
-
 
 void info::setPrivateKey(std::string privateKey) {
     this->pri_key = privateKey;
@@ -1073,6 +1069,7 @@ std::string timeToString(time_t t) {
     char buffer[20];
     std::strftime(buffer, sizeof(buffer), "%Y/%m/%d %H:%M:%S", tm_ptr);
     return std::string(buffer);
+}
   
 // Tạo option cho bước 1
 uint32_t createOptions(bool initial, bool renew) {

@@ -90,15 +90,6 @@ void processTGSResponse(
         throw invalid_argument("Realm or ID does not match server information");
     }
 
-    //string now = get_current_time_formatted();
-
-    //if (now < from_time) {
-    //    throw invalid_argument("Ticket is not yet valid");
-    //}
-    //if (now > till_time) {
-    //    throw invalid_argument("Ticket has expired");
-    //}
-
     auto TS2_c_v = chrono::system_clock::now();  // Giả sử TS2 là time_point hiện tại
     string TS2_c_v_str = timePointToString(TS2_c_v);  // Chuyển TS2 thành chuỗi
     string subkey = createSubkey(kcv, TS2_c_v_str);
@@ -299,7 +290,7 @@ int main() {
 
     // Thông tin client
     std::string realm_c = "Kerberos05.com";
-    std::string ad_c = "192.168.1.102";
+    std::string ad_c = "192.168.1.101";
 
     info client(username, realm_c, ad_c, "", hashed_pass);
     info serverTGS("tgs001", "Kerberos05.com");
@@ -381,6 +372,7 @@ int main() {
     std::string iv_for_tgs_ticket = as_response_part[3];
     std::string ciphertext_hex_from_as = as_response_part[4];
     std::string iv_for_message_from_as = as_response_part[5];
+    string iv_tgs = iv_for_tgs_ticket;
 
     std::vector<unsigned char> ciphertext_vec_from_as = hexStringToVector(ciphertext_hex_from_as);
 
@@ -426,7 +418,7 @@ int main() {
     // Gửi thông tin tới TGS Server theo dạng "Options|ID_V|Times|Nonce2|Ticket_TGS|Authenticatorc|iv_authen"
     //string Options = "auth";
     string Ticket_TGS = ticket_tgs_from_as;
-    Times = build_times(8, 24);
+    string Times = build_times(8, 24);
     string Nonce2 = generate_nonce(8); // Random 8 bytes
     auto TS2 = chrono::system_clock::now();  // Giả sử TS2 là time_point hiện tại
     string TS2_str = timePointToString(TS2);  // Chuyển TS2 thành chuỗi
@@ -482,30 +474,25 @@ int main() {
 
         // Nhận Service Ticket từ TGS Server
         memset(buffer, 0, sizeof(buffer)); // Clear buffer
-        string clear(buffer);
-        cout << "Clear buffer: " << endl << endl;
         bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
 
         if (bytesReceived == SOCKET_ERROR) {
             int err = WSAGetLastError();
             if (err == WSAETIMEDOUT) {
-                std::cerr << "Timeout: Không nhận được phản hồi từ TGS Server trong 5 phút." << std::endl;
+                std::cerr << "Timeout: Do not receive response from TGS Server in 5 minutes!" << std::endl;
             }
             else {
-                std::cerr << "Recv lỗi từ TGS Server, mã lỗi: " << err << std::endl;
+                std::cerr << "Recv error from TGS Server: " << err << std::endl;
             }
             closesocket(clientSocket);
             WSACleanup();
             return -1;
         }
         else if (bytesReceived == 0) {
-            std::cerr << "Kết nối bị đóng bởi TGS Server." << std::endl;
+            std::cerr << "Connection is closed by TGS Server!" << std::endl;
             closesocket(clientSocket);
             WSACleanup();
             return -1;
-        }
-        else {
-            std::cout << "Received Service Ticket: " << buffer << std::endl << std::endl;
         }
 
 
@@ -596,9 +583,9 @@ int main() {
         std::string rtime_str = timeToString(rtime_t);
         std::string from_str = timeToString(from_t);
         std::string till_str = timeToString(till_t);
-        std::cout << "Thời gian FROM  : " << from_str << '\n';
-        std::cout << "Thời gian TILL  : " << till_str << '\n';
-        std::cout << "Thời gian RTIME  : " << rtime_str << '\n';
+        std::cout << "Display FROM  : " << from_str << '\n';
+        std::cout << "Display TILL  : " << till_str << '\n';
+        std::cout << "Display RTIME  : " << rtime_str << '\n';
 
         string checkT = check_ticket_time(from_time_from_tgs, till_time_from_tgs, rtime_time_from_tgs);
         if (checkT == "RENEW") {

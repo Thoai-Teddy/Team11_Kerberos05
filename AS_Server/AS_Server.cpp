@@ -38,13 +38,7 @@ int main() {
 
     // Kết nối database
     soci::session sql(soci::odbc,
-        "Driver={ODBC Driver 17 for SQL Server};"
-        "Server=192.168.68.112;"
-        "Database=KDC;"
-        "Uid=sa;"
-        "Pwd=Cuongquy2382004@;"
-        "TrustServerCertificate=Yes;"
-        "Encrypt=Yes;");
+        "Driver={SQL Server};Server=ADMIN-PC\\SQLSERVER;Database=KDC;Trusted_Connection=Yes;");
     std::cout << "Connect to database successfully." << std::endl;
 
     std::cout << std::endl << "================ Cho client ket noi ================" << std::endl;

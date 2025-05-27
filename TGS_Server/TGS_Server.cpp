@@ -112,10 +112,6 @@ int main() {
 
     do {
         // Nhận dữ liệu từ Client
-        /*memset(buffer, 0, sizeof(buffer));
-        recv(clientSocket, buffer, sizeof(buffer), 0);
-        cout << "Received data from Client: " << buffer << endl;*/
-
         // Đặt timeout cho socket - 5 phút (300 giây)
         struct timeval timeout;
         timeout.tv_sec = 300;   // 300 giây = 5 phút
@@ -130,17 +126,17 @@ int main() {
         if (recvResult == SOCKET_ERROR) {
             int err = WSAGetLastError();
             if (err == WSAETIMEDOUT) {
-                std::cerr << "Timeout: Không nhận được dữ liệu từ client trong 5 phút." << std::endl;
+                std::cerr << "Timeout: Do not receive data from client in 5 minutes!" << std::endl;
             }
             else {
-                std::cerr << "Recv lỗi, mã lỗi: " << err << std::endl;
+                std::cerr << "Recv error: " << err << std::endl;
             }
             closesocket(clientSocket);
             WSACleanup();
             return -1;
         }
         else if (recvResult == 0) {
-            std::cerr << "Kết nối bị đóng bởi client." << std::endl;
+            std::cerr << "Connection is closed by client!" << std::endl;
             closesocket(clientSocket);
             WSACleanup();
             return -1;
@@ -179,9 +175,6 @@ int main() {
             iv_authen = iv_authen.substr(0, BLOCK_SIZE);
         }
         vector<unsigned char> iv_a(iv_authen.begin(), iv_authen.end());
-
-        //message sau khi tách iv
-        //cout << "Response: " << txt << endl << endl;
 
         std::string options_from_client, ticket_v_from_client, iv_v_from_client;
 
@@ -235,14 +228,9 @@ int main() {
 
         cout << "Received Ticket TGS: " << ticket_tgs_from_client << "\n";
 
-        //std::string authenticatorc_decrypt = decryptAuthenticatorc(authenticatorc_from_client, K_c_tgs, iv_authen);
-
-        //cout << "Received Authenticatorc: " << authenticatorc_decrypt << "\n";
-
-
         //Giải mã Ticket TGS
         std::vector<unsigned char>  ticket_tgs_from_client_vector = hexStringToVector(ticket_tgs_from_client);
-
+        K_tgs = "secretkeytgservr";
         if (K_tgs.size() > BLOCK_SIZE) {
             K_tgs = K_tgs.substr(0, BLOCK_SIZE);
         }
@@ -250,8 +238,6 @@ int main() {
         while (key_tgs.size() < BLOCK_SIZE) key_tgs.push_back(0x00); // Bổ sung nếu thiếu
 
         vector<unsigned char> plaintext_block_from_as = aes_cbc_decrypt(ticket_tgs_from_client_vector, key_tgs, iv_tgs_ticket);
-        //cout << "Ticket TGS vector size: " << ticket_tgs_from_client_vector.size() << " bytes" << endl;
-        //cout << "Decrypted block size (before unpad): " << plaintext_block_from_as.size() << " bytes" << endl;
 
         string plaintext_from_as = unpadString(plaintext_block_from_as);
 
@@ -276,13 +262,6 @@ int main() {
 
         cout << "Received Authenticatorc: " << authenticatorc_decrypt << "\n";
 
-        //Giải mã Authenticatorc
-        //info client("","");
-        //std::string iv="ThisIsMyHomeWork";
-        //std::string priKeyV= TGS_ticket.sessionKey;
-        //std::string subkey_decrypt= authenAuthenticatorAndGetSubkey(authenticatorc_from_client, client, iv, priKeyV);
-
-
         AuthenticatorC authenticator_de = parseAuthenticator(authenticatorc_decrypt);
 
 
@@ -302,20 +281,6 @@ int main() {
             cout << "Realm match between TicketTGS and AuthenticatorC" << endl;
         }
 
-        /*
-        time_t _now = time(nullptr);
-        time_t ts2 = std::chrono::system_clock::to_time_t(authenticator_decrypt.TS2);
-
-        double diff = difftime(_now, ts2); // TS2 là thời gian trong AuthenticatorC
-
-        if (diff < 0 || diff > 300) {
-            // Timestamp không hợp lệ hoặc bị replay
-            throw std::runtime_error("Invalid or expired timestamp in AuthenticatorC");
-        }
-        else {
-            cout << "Timestamp in AuthenticatorC is valid" << endl;
-        }
-        */
 
         //Mã hóa
         uint32_t flag;
@@ -362,7 +327,6 @@ int main() {
         while (Key_v.size() < BLOCK_SIZE) Key_v.push_back(0x00); // Bổ sung nếu thiếu
 
         // Tạo iv để mã hóa Ticket V
-        //string iv_pre_v_ticket = "HiYouAreNotAlone";
         string iv_pre_v_ticket = "";
         iv_pre_v_ticket = generateRandomString();
         if (iv_pre_v_ticket.size() > BLOCK_SIZE) {
@@ -395,7 +359,6 @@ int main() {
         while (Key_c_tgs.size() < BLOCK_SIZE) Key_c_tgs.push_back(0x00); // Bổ sung nếu thiếu
 
         // Tạo iv để mã hóa plaintext
-        //string iv_pre_v = "ImAloneAndAboutY";
         string iv_pre_v = generateRandomString();
         if (iv_pre_v.size() > BLOCK_SIZE) {
             iv_pre_v = iv_pre_v.substr(0, BLOCK_SIZE);

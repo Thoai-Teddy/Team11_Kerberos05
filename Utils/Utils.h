@@ -59,7 +59,7 @@ public:
     info(const std::string& id, const std::string& realm, const std::string ad)
         : id(id), realm(realm), ad(ad), pub_key(""), pri_key("") {};
     // Constructor để khởi tạo các giá trị
-    info(const std::string& id, const std::string& ad, const std::string& realm,
+    info(const std::string& id, const std::string& realm, const std::string& ad,
         const std::string& pub_key, const std::string& pri_key)
         : id(id), ad(ad), realm(realm), pub_key(pub_key), pri_key(pri_key) {}
 
