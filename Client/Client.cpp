@@ -4,6 +4,7 @@ const int BLOCK_SIZE = 16;
 
 string OPTION = "";
 
+int SEQ_CLIENT = 0;
 
 SOCKET clientSocket; // Để đóng socket khi cần
 
@@ -33,6 +34,23 @@ void sendToServer(SOCKET clientSocket, const string& message) {
     }
 }
 
+string createAuthenticatorForTGS(const info& clientInfo) {
+    // Tạo đối tượng AuthenticatorC
+    AuthenticatorC authenticator;
+    authenticator.clientID = clientInfo.getID();    // IDC: ID của Client
+    authenticator.realmc = clientInfo.getRealm();   // Realmc: Realm của Client
+    authenticator.TS2 = chrono::system_clock::now(); // TS1: thời điểm gửi yêu cầu
+
+    // Chuyển đổi thời gian TS1 thành chuỗi (Unix timestamp)
+    std::time_t timestamp = std::chrono::system_clock::to_time_t(authenticator.TS2);
+
+    // Tạo chuỗi theo định dạng "IDC|Realmc|TS1"
+    return authenticator.clientID + "|" +
+        authenticator.realmc + "|" +
+        std::to_string(timestamp);
+}
+
+
 
 string createAuthenticator(const info& clientInfo, const string& subkey) {
 
@@ -42,7 +60,7 @@ string createAuthenticator(const info& clientInfo, const string& subkey) {
     authenticator.realmc = clientInfo.getRealm(); // Realm của Client
     authenticator.TS2 = chrono::system_clock::now(); // Timestamp khi Client gửi yêu cầu
     authenticator.subkey = subkey;     // Subkey bảo vệ phiên giao dịch
-    authenticator.seqNum = 1;         // Số thứ tự (có thể dùng cơ chế tăng dần cho mỗi lần gửi yêu cầu)
+    authenticator.seqNum = ++SEQ_CLIENT;         // Số thứ tự (có thể dùng cơ chế tăng dần cho mỗi lần gửi yêu cầu)
 
     // Chuyển đổi thời gian TS2 thành chuỗi (ví dụ sử dụng thời gian Unix timestamp)
     std::time_t timestamp = std::chrono::system_clock::to_time_t(authenticator.TS2);
@@ -397,7 +415,7 @@ int main() {
 
     // Đóng kết nối với AS Server
     closesocket(clientSocket);
-    
+
     // Kết nối tới TGS Server
     //Cấu hình
     info serverV("sv001", "Kerberos05.com");
@@ -416,10 +434,10 @@ int main() {
     string Ticket_TGS = ticket_tgs_from_as;
     string Times = build_times(8, 24);
     string Nonce2 = generate_nonce(8); // Random 8 bytes
-    auto TS2 = chrono::system_clock::now();  // Giả sử TS2 là time_point hiện tại
-    string TS2_str = timePointToString(TS2);  // Chuyển TS2 thành chuỗi
-    string subkey = createSubkey(K_c_tgs, TS2_str);
-    string Authenticatorc = createAuthenticator(client, subkey);
+    //auto TS2 = chrono::system_clock::now();  // Giả sử TS2 là time_point hiện tại
+    //string TS2_str = timePointToString(TS2);  // Chuyển TS2 thành chuỗi
+    //string subkey = createSubkey(K_c_tgs, TS2_str);
+    string Authenticatorc = createAuthenticatorForTGS(client);
 
     //Mã hóa Authenticatorc 
     string realm_c_from_tgs, id_c_from_tgs, ticket_v_from_tgs, ciphertext_hex_from_tgs;
@@ -646,6 +664,6 @@ int main() {
     // Đóng kết nối với Service Server
     closesocket(clientSocket);
     WSACleanup();
-
+    cout << "SEQ_CLIENT: " << SEQ_CLIENT << endl << endl;
     return 0;
 }

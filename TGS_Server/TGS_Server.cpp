@@ -92,7 +92,13 @@ int main() {
     bind(tgsSocket, (sockaddr*)&tgsAddr, sizeof(tgsAddr));
     listen(tgsSocket, 5);
 
+    /*soci::session sql(soci::odbc,
+        "Driver={SQL Server};Server=DESKTOP-5J9VCHI;Database=KDC;Trusted_Connection=Yes;");*/
+
+    std::cout << "Successfully connected to Database KDC!\n";
+
     cout << "TGS Server listening on port 8801...\n";
+
 
     clientSocket = accept(tgsSocket, (sockaddr*)&clientAddr, &clientAddrLen);
     cout << "Client connected to TGS.\n";
@@ -114,7 +120,6 @@ int main() {
         "TrustServerCertificate=Yes;"
         "Encrypt=Yes;");
 
-    std::cout << "Successfully connected to Database KDC!\n";
 
     // Truy vấn KTGS từ bảng TGSERVER với IDTGS = 'tgs001'
     soci::statement st1 = (sql.prepare <<
@@ -210,14 +215,14 @@ int main() {
         if (!ticket_v_from_client.empty()) {
             cout << endl << "[EXPIRED TICKET V]: " << ticket_v_from_client << endl;
         }
-        
+
         if (count != 0 && !isRenewOption(options_from_client)) {
             string response = "You have been issued a ticket!";
             cout << "[ALERT]\n[TGS -> Client]: " << response << endl << endl;
             send_message(clientSocket, response);
             break;
         }
-        
+
 
         while (iv_a.size() < BLOCK_SIZE) iv_a.push_back(0x00); // Bổ sung nếu thiếu
         std::vector <std::string> client_request_vector = splitString(txt, "|");
@@ -296,7 +301,7 @@ int main() {
 
         cout << "[DECRYPT]\n[Authenticatorc]: " << authenticatorc_decrypt << "\n";
 
-        AuthenticatorC authenticator_de = parseAuthenticator(authenticatorc_decrypt);
+        AuthenticatorC authenticator_de = parseAuthenticatorForTGS(authenticatorc_decrypt);
 
 
         //Kiểm tra

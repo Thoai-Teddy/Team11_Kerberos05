@@ -2,6 +2,8 @@
 
 const int BLOCK_SIZE = 16;
 
+int SEQ_SERVERV = 0;
+
 string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, const string& iv, const string& priKeyV, ServiceTicket& ticket) {
     // Bước 1: Chuyển encryptTicket thành vector<unsigned char>
     vector<unsigned char> cipherBytes = hexStringToVector(encryptTicket);
@@ -36,7 +38,8 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
         "Pwd=211038;"
         "TrustServerCertificate=Yes;"
         "Encrypt=Yes;");
-
+    /*soci::session sql(soci::odbc,
+        "Driver={SQL Server};Server=DESKTOP-5J9VCHI;Database=SERVERV;Trusted_Connection=Yes;");*/
     std::cout << "Successfully connect to Database SERVERV!\n";
 
     std::string realm, address;
@@ -117,6 +120,12 @@ string authenAuthenticatorAndGetSubkey(const string& encryptAuthenticator, Servi
         cout << "Invalid RealmC in Authen!" << endl << endl;
         return "mismatch!";
     }
+    if (auth.seqNum != SEQ_SERVERV + 1) {
+        sucess = false;
+        cout << "Incorrect Seq Number!" << endl << endl;
+        return "mismatch!";
+    }
+    SEQ_SERVERV++;
 
     time_t from = chrono::system_clock::to_time_t(ticket.timeInfo.from);
     time_t till = chrono::system_clock::to_time_t(ticket.timeInfo.till);
@@ -277,6 +286,7 @@ int main() {
 
     size_t pos = response.find('|');
     if (pos != std::string::npos) cout << endl << "[ENCRYPT]\n[V -> Client]: " << response << endl << endl;
+    else if (response == "Kerberos 5 authentication complete!") cout << endl << "[V -> Client]: " << response << endl << endl;
     else cout << endl << "[ALERT]\n[V -> Client]: " << response << endl << endl;
 
     // Gửi phản hồi
@@ -286,6 +296,6 @@ int main() {
     closesocket(clientSocket);
     closesocket(serviceSocket);
     WSACleanup();
-
+    cout << "SEQ_SERVERV: " << SEQ_SERVERV << endl << endl;
     return 0;
 }

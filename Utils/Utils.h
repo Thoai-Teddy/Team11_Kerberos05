@@ -26,6 +26,7 @@
 
 using namespace std;
 
+
 //Option step 5
 enum APOptions {
     RESERVED = 1u << 31,       // Bit 0 (MSB)
@@ -106,7 +107,7 @@ struct AuthenticatorC {
 
 //hàm lưu giá trị vào AuthenticatorC sau khi giải mã:
 AuthenticatorC parseAuthenticator(const string& decryptedText);
-
+AuthenticatorC parseAuthenticatorForTGS(const string& decryptedText);
 
 // Hàm nhận và xử lý dữ liệu từ TGS
 struct TGSData {
