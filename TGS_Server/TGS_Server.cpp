@@ -98,49 +98,79 @@ int main() {
     cout << "Client connected to TGS.\n";
 
     //Mặc định Key
-    std::string K_tgs = "ScoobydooWhereRU";
-    std::string K_v = "ThereIsAManOnSky";
+    //std::string K_tgs = "ScoobydooWhereRU";
+    //std::string K_v = "ThereIsAManOnSky";
     std::string K_c_v = "YouAreVeryPretty";
+    std::string K_tgs, K_v;
+    std::string idTGS = "tgs001";
+    soci::indicator indKTGS, indKV;
+
+    soci::session sql(soci::odbc,
+        "Driver={ODBC Driver 17 for SQL Server};"
+        "Server=DESKTOP-UE4ET37;"     // Thay bằng tên server SQL thực tế
+        "Database=KDC;"                // Database bạn đã tạo
+        "Uid=sa;"                      // Tài khoản SQL Server
+        "Pwd=211038;"                  // Mật khẩu SQL Server
+        "TrustServerCertificate=Yes;"
+        "Encrypt=Yes;");
+
+    std::cout << "Successfully connected to Database KDC!\n";
+
+    // Truy vấn KTGS từ bảng TGSERVER với IDTGS = 'tgs001'
+    soci::statement st1 = (sql.prepare <<
+        "SELECT CAST(KTGS AS VARCHAR(MAX)) FROM dbo.TGSERVER WHERE IDTGS = :idtgs",
+        soci::use(idTGS), soci::into(K_tgs, indKTGS));
+
+    st1.execute();
+    if (st1.fetch() && indKTGS == soci::i_ok) {
+        std::cout << "KTGS: " << K_tgs << "\n\n";
+    }
+    else {
+        std::cerr << "Cannot take KTGS from TGSERVER\n";
+    }
 
     //Cấu hình ServerService
-    info ServerV("IDServerV", "RealmServerV");
+    info ServerV("sv001", "Kerberos05.com");
 
     int count = 0;
 
     do {
-        // Nhận dữ liệu từ Client
-        // Đặt timeout cho socket - 5 phút (300 giây)
+        // receive request from client
+        // Set timeout for socket - 5 minutes (300 seconds)
         struct timeval timeout;
-        timeout.tv_sec = 300;   // 300 giây = 5 phút
-        timeout.tv_usec = 0;    // microseconds
-
+        timeout.tv_sec = 300;
+        timeout.tv_usec = 0;
         setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 
-        // Nhận dữ liệu từ Client
+        // Receive data from Client
+        char buffer[4096];  // or an appropriate size for your message
         memset(buffer, 0, sizeof(buffer));
         int recvResult = recv(clientSocket, buffer, sizeof(buffer), 0);
 
         if (recvResult == SOCKET_ERROR) {
             int err = WSAGetLastError();
             if (err == WSAETIMEDOUT) {
-                std::cerr << "Timeout: Do not receive data from client in 5 minutes!" << std::endl;
+                std::cerr << "Timeout: No data received from client within 5 minutes!" << std::endl;
             }
             else {
-                std::cerr << "Recv error: " << err << std::endl;
+                std::cerr << "Receive error (WSA error code: " << err << ")" << std::endl;
             }
             closesocket(clientSocket);
             WSACleanup();
             return -1;
         }
         else if (recvResult == 0) {
-            std::cerr << "Connection is closed by client!" << std::endl;
+            // Client closed the connection gracefully
+            std::cerr << "Client has closed the connection. Terminating session with this client." << std::endl;
             closesocket(clientSocket);
             WSACleanup();
             return -1;
         }
         else {
-            std::cout << "[Client -> TGS]: " << buffer << std::endl << endl;
+            std::cout << "[Client -> TGS]: " << buffer << std::endl << std::endl;
+            // Continue processing the received data if needed
         }
+
 
         // Lấy iv để giải mã TGS ticket
         string txt(buffer);
@@ -187,10 +217,7 @@ int main() {
             send_message(clientSocket, response);
             break;
         }
-        if (isRenewOption(options_from_client) && !ticket_v_from_client.empty()) {  //giải mã ticketv và kiểm tra flag
-            string response = decryptTicketV(ticket_v_from_client, iv_v_from_client, K_v);
-            if(response != "renew") send_message(clientSocket, response);
-        };
+        
 
         while (iv_a.size() < BLOCK_SIZE) iv_a.push_back(0x00); // Bổ sung nếu thiếu
         std::vector <std::string> client_request_vector = splitString(txt, "|");
@@ -209,7 +236,24 @@ int main() {
         }
         cout << endl << "Received Authenticatorc: " << authenticatorc_from_client << endl << endl;
 
+        cout << "ID_V received from client: " << id_v_from_client << endl << endl;
+        // Truy vấn KV từ bảng SSERVER với IDV = 'sv001'
+        soci::statement st2 = (sql.prepare <<
+            "SELECT CAST(KV AS VARCHAR(MAX)) FROM SSERVER WHERE IDV = :idv",
+            soci::use(id_v_from_client), soci::into(K_v, indKV));
 
+        st2.execute();
+        if (st2.fetch() && indKV == soci::i_ok) {
+            std::cout << "K_v from DB: " << K_v << "\n\n";
+        }
+        else {
+            std::cerr << "Cannot take KV from SSERVER\n";
+        }
+
+        if (isRenewOption(options_from_client) && !ticket_v_from_client.empty()) {  //giải mã ticketv và kiểm tra flag
+            string response = decryptTicketV(ticket_v_from_client, iv_v_from_client, K_v);
+            if (response != "renew") send_message(clientSocket, response);
+        };
 
         std::string now = get_current_time_formatted();
         if (now > times_rtime_from_client)
@@ -223,7 +267,7 @@ int main() {
 
         //Giải mã Ticket TGS
         std::vector<unsigned char>  ticket_tgs_from_client_vector = hexStringToVector(ticket_tgs_from_client);
-        K_tgs = "secretkeytgservr";
+        //K_tgs = "secretkeytgservr";
         if (K_tgs.size() > BLOCK_SIZE) {
             K_tgs = K_tgs.substr(0, BLOCK_SIZE);
         }
@@ -296,7 +340,7 @@ int main() {
             time_point_to_uint64(Ticket_V.timeInfo.from), time_point_to_uint64(Ticket_V.timeInfo.till), time_point_to_uint64(Ticket_V.timeInfo.rtime));
 
         std::string plaintext = K_c_v + "|" + timeTostring(Ticket_V.timeInfo.from) + "|" + timeTostring(Ticket_V.timeInfo.till) + "|" + timeTostring(Ticket_V.timeInfo.rtime) + "|"
-            + nonce2_from_client + "|" + ServerV.getRealm() + "|" + ServerV.getID();
+            + nonce2_from_client + "|" + ServerV.getRealm() + "|" + id_v_from_client;
 
         std::cout << plaintext << std::endl;
 
@@ -308,7 +352,6 @@ int main() {
         vector<unsigned char> padded_plaintext = padString(plaintext);
 
         // Mã hóa Ticket V
-
         if (K_v.size() > BLOCK_SIZE) {
             K_v = K_v.substr(0, BLOCK_SIZE);
         }
@@ -319,6 +362,7 @@ int main() {
         // Tạo iv để mã hóa Ticket V
         string iv_pre_v_ticket = "";
         iv_pre_v_ticket = generateRandomString();
+
         if (iv_pre_v_ticket.size() > BLOCK_SIZE) {
             iv_pre_v_ticket = iv_pre_v_ticket.substr(0, BLOCK_SIZE);
         }
@@ -331,11 +375,11 @@ int main() {
 
         cout << "[ENCRYPT]\n[Ticket V]: " << Ticket_V_encrypted_str << endl << endl;
 
-        vector<unsigned char> cipherBytes = hexStringToVector(Ticket_V_encrypted_str);
+        /*vector<unsigned char> cipherBytes = hexStringToVector(Ticket_V_encrypted_str);
         vector<unsigned char> key(K_v.begin(), K_v.end());
         vector<unsigned char> ivBytes(iv_pre_v_ticket.begin(), iv_pre_v_ticket.end());
         vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key, ivBytes);
-        string decryptedText = unpadString(decryptedBytes);
+        string decryptedText = unpadString(decryptedBytes);*/
 
         // Mã hóa plaintext
         std::string K_c_tgs = TGS_ticket.sessionKey;
@@ -367,8 +411,8 @@ int main() {
         send_message(clientSocket, response);
 
         // Gửi Service Ticket
-        string serviceTicket = "ServiceTicket_for_" + string(buffer);
-        send(clientSocket, serviceTicket.c_str(), serviceTicket.length(), 0);
+        /*string serviceTicket = "ServiceTicket_for_" + string(buffer);
+        send(clientSocket, serviceTicket.c_str(), serviceTicket.length(), 0);*/
         count++;
     } while (true);
 

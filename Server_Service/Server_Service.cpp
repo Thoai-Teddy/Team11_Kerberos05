@@ -29,7 +29,13 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     // Bước 6: Xác thực
     //Connect to DB SQL Server
     soci::session sql(soci::odbc,
-        "Driver={SQL Server};Server=ADMIN-PC\\SQLSERVER;Database=SERVERV;Trusted_Connection=Yes;");
+        "Driver={ODBC Driver 17 for SQL Server};"
+        "Server=DESKTOP-UE4ET37;"
+        "Database=SERVERV;"
+        "Uid=sa;"
+        "Pwd=211038;"
+        "TrustServerCertificate=Yes;"
+        "Encrypt=Yes;");
 
     std::cout << "Successfully connect to Database SERVERV!\n";
 
@@ -211,7 +217,7 @@ int main() {
     sockaddr_in serviceAddr, clientAddr;
     int clientAddrLen = sizeof(clientAddr);
     char buffer[2048]; // Tăng kích thước nếu dữ liệu dài hơn
-    string priKeyV = "ThereIsAManOnSky"; // Khóa bí mật của Service Server (16 bytes)
+    string priKeyV = "secretrkeyserver"; // Khóa bí mật của Service Server (16 bytes)
     string iv = generateRandomString();     // random IV để mã hóa phản hồi
 
     WSAStartup(MAKEWORD(2, 2), &wsaData);

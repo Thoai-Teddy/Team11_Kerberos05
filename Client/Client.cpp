@@ -400,7 +400,7 @@ int main() {
     
     // Kết nối tới TGS Server
     //Cấu hình
-    info serverV("IDServerV", "RealmServerV");
+    info serverV("sv001", "Kerberos05.com");
 
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     serverAddr.sin_port = htons(8801); // Kết nối tới cổng 8801 của TGS Server
@@ -453,13 +453,13 @@ int main() {
         bytesReceived = 0;
 
         // Nhận Service Ticket từ TGS Server
-        memset(buffer, 0, sizeof(buffer)); // Clear buffer
-        bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-        if (bytesReceived > 0) {
-            cout << "[TGS -> Client]: " << buffer << endl << endl;
-        }
+        //memset(buffer, 0, sizeof(buffer)); // Clear buffer
+        //bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+        //if (bytesReceived > 0) {
+        //    cout << "[TGS -> Client]: " << buffer << endl << endl;
+        //}
 
-        string trueRes(buffer);
+        //string trueRes(buffer);
 
         // Đặt timeout cho socket - 5 phút (300 giây)
         struct timeval timeout;
@@ -493,7 +493,8 @@ int main() {
 
 
         // Tách dữ liệu mà server trả về
-        string response_tgs = trueRes;
+        string response_tgs(buffer);
+        cout << "[TGS -> CLient]: " << response_tgs << endl << endl;
         // Tách iv để giải mã plaintext
         string iv_pre_v = "";
         try {
