@@ -71,10 +71,10 @@ string authenTicketAndTakeSessionKey(const string& encryptTicket, info& client, 
     time_t rtime = chrono::system_clock::to_time_t(ticket.timeInfo.rtime);
     time_t t_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-    std::cout << "Display FROM  : " << std::put_time(std::localtime(&from), "%Y/%m/%d %H:%M:%S") << '\n';
-    std::cout << "Display TILL  : " << std::put_time(std::localtime(&till), "%Y/%m/%d %H:%M:%S") << '\n';
-    std::cout << "Display RTIME : " << std::put_time(std::localtime(&rtime), "%Y/%m/%d %H:%M:%S") << '\n';
-    std::cout << "Display NOW   : " << std::put_time(std::localtime(&t_now), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "[Display]\nFROM  : " << std::put_time(std::localtime(&from), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "TILL  : " << std::put_time(std::localtime(&till), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "RTIME : " << std::put_time(std::localtime(&rtime), "%Y/%m/%d %H:%M:%S") << '\n';
+    std::cout << "NOW   : " << std::put_time(std::localtime(&t_now), "%Y/%m/%d %H:%M:%S") << '\n';
 
     string checkTime = check_ticket_time(to_string(from), to_string(till), to_string(rtime));
     if (checkTime == "VALID") {

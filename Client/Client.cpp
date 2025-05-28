@@ -400,7 +400,7 @@ int main() {
     
     // Kết nối tới TGS Server
     //Cấu hình
-    info serverV("IDServerV", "RealmServerV");
+    info serverV("sv001", "Kerberos05.com");
 
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     serverAddr.sin_port = htons(8801); // Kết nối tới cổng 8801 của TGS Server

@@ -103,7 +103,7 @@ int main() {
     std::string K_c_v = "YouAreVeryPretty";
 
     //Cấu hình ServerService
-    info ServerV("IDServerV", "RealmServerV");
+    info ServerV("sv001", "Kerberos05.com");
 
     int count = 0;
 
@@ -296,7 +296,7 @@ int main() {
             time_point_to_uint64(Ticket_V.timeInfo.from), time_point_to_uint64(Ticket_V.timeInfo.till), time_point_to_uint64(Ticket_V.timeInfo.rtime));
 
         std::string plaintext = K_c_v + "|" + timeTostring(Ticket_V.timeInfo.from) + "|" + timeTostring(Ticket_V.timeInfo.till) + "|" + timeTostring(Ticket_V.timeInfo.rtime) + "|"
-            + nonce2_from_client + "|" + ServerV.getRealm() + "|" + ServerV.getID();
+            + nonce2_from_client + "|" + ServerV.getRealm() + "|" + id_v_from_client;
 
         std::cout << plaintext << std::endl;
 
