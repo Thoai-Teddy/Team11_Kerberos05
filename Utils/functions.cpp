@@ -4,6 +4,8 @@ const int BLOCK_SIZE = 16;
 const int Nk = 4;          // 8 words * 4 bytes = 32 bytes = 256 bits
 const int Nr = 10;         // 14 rounds cho AES-256
 
+
+
 // AES S-box
 unsigned char sbox[256] = {
 0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
@@ -721,6 +723,35 @@ AuthenticatorC parseAuthenticator(const string& decryptedText) {
     return auth;
 }
 
+AuthenticatorC parseAuthenticatorForTGS(const string& decryptedText) {
+    // Tách chuỗi decryptedText theo dấu '|'
+    vector<string> fields;
+    stringstream ss(decryptedText);
+    string item;
+
+    while (getline(ss, item, '|')) {
+        if (!item.empty()) {
+            fields.push_back(item);
+        }
+    }
+
+    // Kiểm tra số lượng thành phần phải đúng 3
+    if (fields.size() != 3) {
+        throw runtime_error("parseAuthenticatorForTGS: Invalid string format!");
+    }
+
+    // Tạo đối tượng AuthenticatorC
+    AuthenticatorC auth;
+    auth.clientID = fields[0];                          // IDC
+    auth.realmc = fields[1];                            // Realmc
+    auth.TS2 = secondTimestampToTimePoint(fields[2]);   // TS1 gán vào TS2
+    auth.subkey = "";                                   // Không dùng -> gán rỗng
+    auth.seqNum = 0;                                    // Không dùng -> gán 0
+
+    return auth;
+}
+
+
 // Hàm tách chuỗi bằng dấu '|' và gán vào các biến
 void splitAndAssign(const std::string& input, std::string& a, std::string& b, std::string& c) {
     std::stringstream ss(input);
@@ -1070,7 +1101,7 @@ std::string timeToString(time_t t) {
     std::strftime(buffer, sizeof(buffer), "%Y/%m/%d %H:%M:%S", tm_ptr);
     return std::string(buffer);
 }
-  
+
 // Tạo option cho bước 1
 uint32_t createOptions(bool initial, bool renew) {
     uint32_t options = 0;

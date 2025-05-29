@@ -1,6 +1,20 @@
 ﻿#include "../Utils/Utils.h"
 const int BLOCK_SIZE = 16;
 
+std::string receive_message2(SOCKET socket)
+{
+    char buffer[4096];
+    int bytesReceived = recv(socket, buffer, sizeof(buffer), 0);
+    if (bytesReceived <= 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
+            std::cout << "[!] Timeout - không có dữ liệu từ client\n";
+        else
+            std::cout << "[!] Client đã đóng hoặc lỗi recv\n";
+        return "";
+    }
+    return std::string(buffer, bytesReceived);
+}
+
 std::chrono::system_clock::time_point parse_time(const std::string& time_str) {
     std::tm tm = {};
     std::istringstream ss(time_str);
@@ -92,56 +106,99 @@ int main() {
     bind(tgsSocket, (sockaddr*)&tgsAddr, sizeof(tgsAddr));
     listen(tgsSocket, 5);
 
+    /*soci::session sql(soci::odbc,
+        "Driver={SQL Server};Server=DESKTOP-5J9VCHI;Database=KDC;Trusted_Connection=Yes;");*/
+
+    std::cout << "Successfully connected to Database KDC!\n";
+
     cout << "TGS Server listening on port 8801...\n";
+
 
     clientSocket = accept(tgsSocket, (sockaddr*)&clientAddr, &clientAddrLen);
     cout << "Client connected to TGS.\n";
 
     //Mặc định Key
-    std::string K_tgs = "ScoobydooWhereRU";
-    std::string K_v = "ThereIsAManOnSky";
+    //std::string K_tgs = "ScoobydooWhereRU";
+    //std::string K_v = "ThereIsAManOnSky";
     std::string K_c_v = "YouAreVeryPretty";
+    std::string K_tgs, K_v;
+    std::string idTGS = "tgs001";
+    soci::indicator indKTGS, indKV;
+
+    soci::session sql(soci::odbc,
+        "Driver={ODBC Driver 17 for SQL Server};"
+        "Server=DESKTOP-UE4ET37;"     // Thay bằng tên server SQL thực tế
+        "Database=KDC;"                // Database bạn đã tạo
+        "Uid=sa;"                      // Tài khoản SQL Server
+        "Pwd=211038;"                  // Mật khẩu SQL Server
+        "TrustServerCertificate=Yes;"
+        "Encrypt=Yes;");
+
+
+    // Truy vấn KTGS từ bảng TGSERVER với IDTGS = 'tgs001'
+    soci::statement st1 = (sql.prepare <<
+        "SELECT CAST(KTGS AS VARCHAR(MAX)) FROM dbo.TGSERVER WHERE IDTGS = :idtgs",
+        soci::use(idTGS), soci::into(K_tgs, indKTGS));
+
+    st1.execute();
+    if (st1.fetch() && indKTGS == soci::i_ok) {
+        std::cout << "Get KTGS from DB successfully !" << "\n\n";
+    }
+    else {
+        std::cerr << "Cannot take KTGS from TGSERVER\n";
+    }
 
     //Cấu hình ServerService
     info ServerV("sv001", "Kerberos05.com");
 
     int count = 0;
+        
+    int recvResult;
+    // receive request from client
+        // Set timeout for socket - 5 seconds
+    struct timeval tv;
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 
-    do {
-        // Nhận dữ liệu từ Client
-        // Đặt timeout cho socket - 5 phút (300 giây)
-        struct timeval timeout;
-        timeout.tv_sec = 300;   // 300 giây = 5 phút
-        timeout.tv_usec = 0;    // microseconds
+    // Reset buffer before receive
+    memset(buffer, 0, sizeof(buffer));
+    recvResult = 0;
+    recvResult = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
 
-        setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
-
-        // Nhận dữ liệu từ Client
-        memset(buffer, 0, sizeof(buffer));
-        int recvResult = recv(clientSocket, buffer, sizeof(buffer), 0);
-
-        if (recvResult == SOCKET_ERROR) {
-            int err = WSAGetLastError();
-            if (err == WSAETIMEDOUT) {
-                std::cerr << "Timeout: Do not receive data from client in 5 minutes!" << std::endl;
-            }
-            else {
-                std::cerr << "Recv error: " << err << std::endl;
-            }
-            closesocket(clientSocket);
-            WSACleanup();
-            return -1;
-        }
-        else if (recvResult == 0) {
-            std::cerr << "Connection is closed by client!" << std::endl;
-            closesocket(clientSocket);
-            WSACleanup();
-            return -1;
+    // Check recv
+    if (recvResult == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err == WSAETIMEDOUT) {
+            std::cerr << "Timeout: Cannot receive data from Client in 5 second!" << std::endl;
         }
         else {
-            std::cout << "[Client -> TGS]: " << buffer << std::endl << endl;
+            std::cerr << "Error (WSA error code: " << err << ")" << std::endl;
         }
 
+        closesocket(clientSocket);
+        closesocket(tgsSocket);
+        WSACleanup();
+        exit(-1);
+    }
+
+    else if (recvResult == 0) {
+        std::cerr << "Client has been closed the connection. Stop this connection..." << std::endl;
+
+        closesocket(clientSocket);
+        closesocket(tgsSocket);
+        WSACleanup();
+        exit(-1);
+    }
+
+    else {
+        // Đảm bảo buffer có null terminator nếu cần
+        buffer[recvResult] = '\0';
+
+        std::cout << "[Client -> TGS]: " << buffer << std::endl << std::endl;
+    }
+
+    while(true) {
         // Lấy iv để giải mã TGS ticket
         string txt(buffer);
         string iv_pre_tgs_ticket = "";
@@ -180,17 +237,14 @@ int main() {
         if (!ticket_v_from_client.empty()) {
             cout << endl << "[EXPIRED TICKET V]: " << ticket_v_from_client << endl;
         }
-        
+
         if (count != 0 && !isRenewOption(options_from_client)) {
             string response = "You have been issued a ticket!";
             cout << "[ALERT]\n[TGS -> Client]: " << response << endl << endl;
             send_message(clientSocket, response);
             break;
         }
-        if (isRenewOption(options_from_client) && !ticket_v_from_client.empty()) {  //giải mã ticketv và kiểm tra flag
-            string response = decryptTicketV(ticket_v_from_client, iv_v_from_client, K_v);
-            if(response != "renew") send_message(clientSocket, response);
-        };
+
 
         while (iv_a.size() < BLOCK_SIZE) iv_a.push_back(0x00); // Bổ sung nếu thiếu
         std::vector <std::string> client_request_vector = splitString(txt, "|");
@@ -209,7 +263,24 @@ int main() {
         }
         cout << endl << "Received Authenticatorc: " << authenticatorc_from_client << endl << endl;
 
+        cout << "ID_V received from client: " << id_v_from_client << endl << endl;
+        // Truy vấn KV từ bảng SSERVER với IDV = 'sv001'
+        soci::statement st2 = (sql.prepare <<
+            "SELECT CAST(KV AS VARCHAR(MAX)) FROM SSERVER WHERE IDV = :idv",
+            soci::use(id_v_from_client), soci::into(K_v, indKV));
 
+        st2.execute();
+        if (st2.fetch() && indKV == soci::i_ok) {
+            std::cout << "K_v from DB: " << K_v << "\n\n";
+        }
+        else {
+            std::cerr << "Cannot take KV from SSERVER\n";
+        }
+
+        if (isRenewOption(options_from_client) && !ticket_v_from_client.empty()) {  //giải mã ticketv và kiểm tra flag
+            string response = decryptTicketV(ticket_v_from_client, iv_v_from_client, K_v);
+            if (response != "renew") send_message(clientSocket, response);
+        };
 
         std::string now = get_current_time_formatted();
         if (now > times_rtime_from_client)
@@ -223,7 +294,7 @@ int main() {
 
         //Giải mã Ticket TGS
         std::vector<unsigned char>  ticket_tgs_from_client_vector = hexStringToVector(ticket_tgs_from_client);
-        K_tgs = "secretkeytgservr";
+        //K_tgs = "secretkeytgservr";
         if (K_tgs.size() > BLOCK_SIZE) {
             K_tgs = K_tgs.substr(0, BLOCK_SIZE);
         }
@@ -252,7 +323,7 @@ int main() {
 
         cout << "[DECRYPT]\n[Authenticatorc]: " << authenticatorc_decrypt << "\n";
 
-        AuthenticatorC authenticator_de = parseAuthenticator(authenticatorc_decrypt);
+        AuthenticatorC authenticator_de = parseAuthenticatorForTGS(authenticatorc_decrypt);
 
 
         //Kiểm tra
@@ -268,7 +339,7 @@ int main() {
             throw std::runtime_error("Realm mismatch between TicketTGS and AuthenticatorC");
         }
         else {
-            cout << "Realm match between TicketTGS and AuthenticatorC" << endl;
+            cout << "Realm match between TicketTGS and AuthenticatorC" << endl << endl;
         }
 
 
@@ -308,7 +379,6 @@ int main() {
         vector<unsigned char> padded_plaintext = padString(plaintext);
 
         // Mã hóa Ticket V
-
         if (K_v.size() > BLOCK_SIZE) {
             K_v = K_v.substr(0, BLOCK_SIZE);
         }
@@ -319,6 +389,7 @@ int main() {
         // Tạo iv để mã hóa Ticket V
         string iv_pre_v_ticket = "";
         iv_pre_v_ticket = generateRandomString();
+
         if (iv_pre_v_ticket.size() > BLOCK_SIZE) {
             iv_pre_v_ticket = iv_pre_v_ticket.substr(0, BLOCK_SIZE);
         }
@@ -331,11 +402,11 @@ int main() {
 
         cout << "[ENCRYPT]\n[Ticket V]: " << Ticket_V_encrypted_str << endl << endl;
 
-        vector<unsigned char> cipherBytes = hexStringToVector(Ticket_V_encrypted_str);
+        /*vector<unsigned char> cipherBytes = hexStringToVector(Ticket_V_encrypted_str);
         vector<unsigned char> key(K_v.begin(), K_v.end());
         vector<unsigned char> ivBytes(iv_pre_v_ticket.begin(), iv_pre_v_ticket.end());
         vector<unsigned char> decryptedBytes = aes_cbc_decrypt(cipherBytes, key, ivBytes);
-        string decryptedText = unpadString(decryptedBytes);
+        string decryptedText = unpadString(decryptedBytes);*/
 
         // Mã hóa plaintext
         std::string K_c_tgs = TGS_ticket.sessionKey;
@@ -366,11 +437,53 @@ int main() {
         cout << "[TGS -> Client]: " << response << endl << endl;
         send_message(clientSocket, response);
 
-        // Gửi Service Ticket
-        string serviceTicket = "ServiceTicket_for_" + string(buffer);
-        send(clientSocket, serviceTicket.c_str(), serviceTicket.length(), 0);
         count++;
-    } while (true);
+
+        if (count < 2 || (count >= 2 && Ticket_V.timeInfo.from <= std::chrono::system_clock::now() && std::chrono::system_clock::now() < Ticket_V.timeInfo.rtime)) {
+            // receive request from client
+            // Set timeout for socket - 5 minutes (300s)
+            struct timeval tv;
+            tv.tv_sec = 300;
+            tv.tv_usec = 0;
+            setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+
+            memset(buffer, 0, sizeof(buffer));
+            recvResult = 0;
+            recvResult = recv(clientSocket, buffer, sizeof(buffer) - 1, 0); // -1 for character '\0'
+
+            // Check recv
+            if (recvResult == SOCKET_ERROR) {
+                int err = WSAGetLastError();
+                if (err == WSAETIMEDOUT) {
+                    std::cerr << "Timeout: Cannot receive data from Client in 5 second!" << std::endl;
+                }
+                else {
+                    std::cerr << "Error (WSA error code: " << err << ")" << std::endl;
+                }
+
+                closesocket(clientSocket);
+                closesocket(tgsSocket);
+                WSACleanup();
+                exit(-1);
+            }
+
+            else if (recvResult == 0) {
+                cout << "Do not receive any request from Client. Close connection!" << endl;
+
+                closesocket(clientSocket);
+                closesocket(tgsSocket);
+                WSACleanup();
+                exit(-1);
+            }
+
+            else {
+                // Đảm bảo buffer có null terminator nếu cần
+                buffer[recvResult] = '\0';
+
+                std::cout << "[Client -> TGS]: " << buffer << std::endl << std::endl;
+            }
+        }
+    };
 
     closesocket(clientSocket);
     closesocket(tgsSocket);
