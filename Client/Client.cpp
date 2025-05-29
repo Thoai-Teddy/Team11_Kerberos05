@@ -411,6 +411,9 @@ int main() {
 
     if (nonce1_from_as != nonce1) {
         std::cout << "WARNING! DIFFERENT NONCE! THIS MAY BE A REPLAY ATTACK!" << endl << endl;
+        closesocket(clientSocket);
+        WSACleanup();
+        exit(-1);
     }
 
     // Đóng kết nối với AS Server
@@ -500,13 +503,13 @@ int main() {
             }
             closesocket(clientSocket);
             WSACleanup();
-            return -1;
+            exit(-1);
         }
         else if (bytesReceived == 0) {
             std::cerr << "Connection is closed by TGS Server!" << std::endl;
             closesocket(clientSocket);
             WSACleanup();
-            return -1;
+            exit(-1);
         }
 
 
@@ -544,7 +547,7 @@ int main() {
             cout << "Error: Response from TGS Server is invalid!" << endl << endl;
             closesocket(clientSocket);
             WSACleanup();
-            return -1;
+            exit(-1);
         }
 
         realm_c_from_tgs = response_tgs_part[0];

@@ -128,7 +128,7 @@ int main() {
 
     st1.execute();
     if (st1.fetch() && indKTGS == soci::i_ok) {
-        std::cout << "KTGS: " << K_tgs << "\n\n";
+        std::cout << "Get KTGS from DB successfully !" << "\n\n";
     }
     else {
         std::cerr << "Cannot take KTGS from TGSERVER\n";
@@ -148,9 +148,8 @@ int main() {
         setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 
         // Receive data from Client
-        char buffer[4096];  // or an appropriate size for your message
         memset(buffer, 0, sizeof(buffer));
-        int recvResult = recv(clientSocket, buffer, sizeof(buffer), 0);
+        int recvResult = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
 
         if (recvResult == SOCKET_ERROR) {
             int err = WSAGetLastError();
@@ -161,19 +160,20 @@ int main() {
                 std::cerr << "Receive error (WSA error code: " << err << ")" << std::endl;
             }
             closesocket(clientSocket);
+            closesocket(tgsSocket);
             WSACleanup();
-            return -1;
+            exit(-1);
         }
         else if (recvResult == 0) {
             // Client closed the connection gracefully
             std::cerr << "Client has closed the connection. Terminating session with this client." << std::endl;
             closesocket(clientSocket);
+            closesocket(tgsSocket);
             WSACleanup();
-            return -1;
+            exit(-1);
         }
         else {
             std::cout << "[Client -> TGS]: " << buffer << std::endl << std::endl;
-            // Continue processing the received data if needed
         }
 
 
@@ -419,6 +419,14 @@ int main() {
         /*string serviceTicket = "ServiceTicket_for_" + string(buffer);
         send(clientSocket, serviceTicket.c_str(), serviceTicket.length(), 0);*/
         count++;
+
+        if (count == 2) {
+            cout << "Do not receive any request from Client. Close connection!" << endl;
+            closesocket(clientSocket);
+            closesocket(tgsSocket);
+            WSACleanup();
+            exit(-1);
+        }
     } while (true);
 
     closesocket(clientSocket);
