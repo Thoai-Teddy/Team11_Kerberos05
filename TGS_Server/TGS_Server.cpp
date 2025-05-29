@@ -1,6 +1,20 @@
 ﻿#include "../Utils/Utils.h"
 const int BLOCK_SIZE = 16;
 
+std::string receive_message2(SOCKET socket)
+{
+    char buffer[4096];
+    int bytesReceived = recv(socket, buffer, sizeof(buffer), 0);
+    if (bytesReceived <= 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
+            std::cout << "[!] Timeout - không có dữ liệu từ client\n";
+        else
+            std::cout << "[!] Client đã đóng hoặc lỗi recv\n";
+        return "";
+    }
+    return std::string(buffer, bytesReceived);
+}
+
 std::chrono::system_clock::time_point parse_time(const std::string& time_str) {
     std::tm tm = {};
     std::istringstream ss(time_str);
@@ -138,45 +152,53 @@ int main() {
     info ServerV("sv001", "Kerberos05.com");
 
     int count = 0;
+        
+    int recvResult;
+    // receive request from client
+        // Set timeout for socket - 5 seconds
+    struct timeval tv;
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 
-    do {
-        // receive request from client
-        // Set timeout for socket - 5 minutes (300 seconds)
-        struct timeval timeout;
-        timeout.tv_sec = 300;
-        timeout.tv_usec = 0;
-        setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+    // Reset buffer before receive
+    memset(buffer, 0, sizeof(buffer));
+    recvResult = 0;
+    recvResult = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
 
-        // Receive data from Client
-        memset(buffer, 0, sizeof(buffer));
-        int recvResult = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
-
-        if (recvResult == SOCKET_ERROR) {
-            int err = WSAGetLastError();
-            if (err == WSAETIMEDOUT) {
-                std::cerr << "Timeout: No data received from client within 5 minutes!" << std::endl;
-            }
-            else {
-                std::cerr << "Receive error (WSA error code: " << err << ")" << std::endl;
-            }
-            closesocket(clientSocket);
-            closesocket(tgsSocket);
-            WSACleanup();
-            exit(-1);
-        }
-        else if (recvResult == 0) {
-            // Client closed the connection gracefully
-            std::cerr << "Client has closed the connection. Terminating session with this client." << std::endl;
-            closesocket(clientSocket);
-            closesocket(tgsSocket);
-            WSACleanup();
-            exit(-1);
+    // Check recv
+    if (recvResult == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err == WSAETIMEDOUT) {
+            std::cerr << "Timeout: Cannot receive data from Client in 5 second!" << std::endl;
         }
         else {
-            std::cout << "[Client -> TGS]: " << buffer << std::endl << std::endl;
+            std::cerr << "Error (WSA error code: " << err << ")" << std::endl;
         }
 
+        closesocket(clientSocket);
+        closesocket(tgsSocket);
+        WSACleanup();
+        exit(-1);
+    }
 
+    else if (recvResult == 0) {
+        std::cerr << "Client has been closed the connection. Stop this connection..." << std::endl;
+
+        closesocket(clientSocket);
+        closesocket(tgsSocket);
+        WSACleanup();
+        exit(-1);
+    }
+
+    else {
+        // Đảm bảo buffer có null terminator nếu cần
+        buffer[recvResult] = '\0';
+
+        std::cout << "[Client -> TGS]: " << buffer << std::endl << std::endl;
+    }
+
+    while(true) {
         // Lấy iv để giải mã TGS ticket
         string txt(buffer);
         string iv_pre_tgs_ticket = "";
@@ -317,7 +339,7 @@ int main() {
             throw std::runtime_error("Realm mismatch between TicketTGS and AuthenticatorC");
         }
         else {
-            cout << "Realm match between TicketTGS and AuthenticatorC" << endl;
+            cout << "Realm match between TicketTGS and AuthenticatorC" << endl << endl;
         }
 
 
@@ -415,19 +437,53 @@ int main() {
         cout << "[TGS -> Client]: " << response << endl << endl;
         send_message(clientSocket, response);
 
-        // Gửi Service Ticket
-        /*string serviceTicket = "ServiceTicket_for_" + string(buffer);
-        send(clientSocket, serviceTicket.c_str(), serviceTicket.length(), 0);*/
         count++;
 
-        if (count == 2) {
-            cout << "Do not receive any request from Client. Close connection!" << endl;
-            closesocket(clientSocket);
-            closesocket(tgsSocket);
-            WSACleanup();
-            exit(-1);
+        if (count < 2 || (count >= 2 && Ticket_V.timeInfo.from <= std::chrono::system_clock::now() && std::chrono::system_clock::now() < Ticket_V.timeInfo.rtime)) {
+            // receive request from client
+            // Set timeout for socket - 5 minutes (300s)
+            struct timeval tv;
+            tv.tv_sec = 300;
+            tv.tv_usec = 0;
+            setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+
+            memset(buffer, 0, sizeof(buffer));
+            recvResult = 0;
+            recvResult = recv(clientSocket, buffer, sizeof(buffer) - 1, 0); // -1 for character '\0'
+
+            // Check recv
+            if (recvResult == SOCKET_ERROR) {
+                int err = WSAGetLastError();
+                if (err == WSAETIMEDOUT) {
+                    std::cerr << "Timeout: Cannot receive data from Client in 5 second!" << std::endl;
+                }
+                else {
+                    std::cerr << "Error (WSA error code: " << err << ")" << std::endl;
+                }
+
+                closesocket(clientSocket);
+                closesocket(tgsSocket);
+                WSACleanup();
+                exit(-1);
+            }
+
+            else if (recvResult == 0) {
+                cout << "Do not receive any request from Client. Close connection!" << endl;
+
+                closesocket(clientSocket);
+                closesocket(tgsSocket);
+                WSACleanup();
+                exit(-1);
+            }
+
+            else {
+                // Đảm bảo buffer có null terminator nếu cần
+                buffer[recvResult] = '\0';
+
+                std::cout << "[Client -> TGS]: " << buffer << std::endl << std::endl;
+            }
         }
-    } while (true);
+    };
 
     closesocket(clientSocket);
     closesocket(tgsSocket);
